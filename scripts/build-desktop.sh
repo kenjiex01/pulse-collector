@@ -112,6 +112,18 @@ if [[ -f "$SILENT_UPDATER_PATCH" ]]; then
   python3 "$SILENT_UPDATER_PATCH" "$ROOT"
   echo "    Applied silent auto-download + auto-install updater patch"
 fi
+ELECTRON_MAIN="$ROOT/vendor/nativephp/electron/resources/js/src/main/index.js"
+ELECTRON_MAIN_PATCH="$ROOT/scripts/patches/electron-main-index.js"
+KEEP_USERDATA_PATCH="$ROOT/scripts/patches/keep-legacy-userdata.js"
+KEEP_USERDATA_DEST="$ROOT/vendor/nativephp/electron/resources/js/src/main/keep-legacy-userdata.js"
+if [[ -f "$ELECTRON_MAIN_PATCH" && -f "$ELECTRON_MAIN" ]]; then
+  cp "$ELECTRON_MAIN_PATCH" "$ELECTRON_MAIN"
+  echo "    Applied Electron main entry (keep Biometric Collector userData)"
+fi
+if [[ -f "$KEEP_USERDATA_PATCH" ]]; then
+  cp "$KEEP_USERDATA_PATCH" "$KEEP_USERDATA_DEST"
+  echo "    Applied Biometric Collector SQLite userData lock"
+fi
 
 # Cursor sandbox blocks unlinking node_modules/**/.vscode (EPERM). Move those packages
 # aside, and use `npm install` instead of `npm ci` (ci deletes the whole tree first).
