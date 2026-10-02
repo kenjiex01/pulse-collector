@@ -6,7 +6,8 @@ use App\Console\Commands\CollectBiometricLogsCommand;
 use App\Console\Commands\EncryptEnvSecretsCommand;
 use App\Console\Commands\RunBiometricAutoCollectCommand;
 use App\Listeners\HandleDesktopUpdaterEvents;
-use App\Listeners\StopLegacyBiometricAutoCollectWorker;
+use App\Listeners\RestartBiometricAutoCollectWorker;
+use App\Listeners\StartBiometricScheduleWorker;
 use App\Services\DesktopUpdaterService;
 use App\Support\EncryptedEnv;
 use Illuminate\Database\Schema\Blueprint;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Native\Laravel\Events\App\ApplicationBooted;
+use Native\Laravel\Events\ChildProcess\ProcessExited;
 use Native\Laravel\Events\AutoUpdater\DownloadProgress;
 use Native\Laravel\Events\AutoUpdater\Error;
 use Native\Laravel\Events\AutoUpdater\UpdateAvailable;
@@ -63,7 +65,8 @@ class AppServiceProvider extends ServiceProvider
             $view->with('desktopUpdater', $updater);
         });
 
-        Event::listen(ApplicationBooted::class, StopLegacyBiometricAutoCollectWorker::class);
+        Event::listen(ApplicationBooted::class, StartBiometricScheduleWorker::class);
+        Event::listen(ProcessExited::class, RestartBiometricAutoCollectWorker::class);
 
         if ($this->app->runningInConsole() && ! $this->isNativeDesktop()) {
             return;

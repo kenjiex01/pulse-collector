@@ -13,6 +13,10 @@ class DesktopUpdaterService
 
     public const CACHE_INSTALLING = 'desktop.updater.installing';
 
+    public const CACHE_CHECK_IN_PROGRESS = 'desktop.updater.check_in_progress';
+
+    public const CHECK_PROCESS_ALIAS = 'desktop_updater_check';
+
     public function enabled(): bool
     {
         if (! (bool) config('nativephp.updater.enabled', false)) {
@@ -52,6 +56,58 @@ class DesktopUpdaterService
         } catch (\Throwable) {
             // Browser / non-native runtime — ignore.
         }
+    }
+
+    /**
+     * Queue an update check so the single-threaded desktop PHP server stays responsive.
+     */
+    public function requestBackgroundCheck(): bool
+    {
+        if (! $this->enabled()) {
+            return false;
+        }
+
+        if (Cache::get(self::CACHE_CHECK_IN_PROGRESS)) {
+            return true;
+        }
+
+        $this->pruneStaleUpdateState();
+
+        if (! $this->isNativeDesktop()) {
+            $this->checkForUpdates();
+
+            return true;
+        }
+
+        Cache::put(self::CACHE_CHECK_IN_PROGRESS, true, now()->addMinutes(15));
+
+        $root = str_replace('\\', '/', (string) realpath(base_path() ?: '') ?: base_path());
+
+        try {
+            \Native\Laravel\Facades\ChildProcess::php(
+                [$root.'/artisan', 'desktop:check-updates'],
+                self::CHECK_PROCESS_ALIAS,
+                env: [
+                    'APP_PATH' => $root,
+                ],
+                persistent: false,
+                iniSettings: [
+                    'memory_limit' => '512M',
+                    'max_execution_time' => '300',
+                ],
+            );
+        } catch (\Throwable) {
+            Cache::forget(self::CACHE_CHECK_IN_PROGRESS);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function isNativeDesktop(): bool
+    {
+        return (bool) config('nativephp-internal.running', env('NATIVEPHP_RUNNING', false));
     }
 
     public function quitAndInstall(): void

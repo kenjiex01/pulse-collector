@@ -340,16 +340,18 @@
                 render();
             };
 
-            window.addEventListener('load', markPageReady);
+            window.addEventListener('load', () => {
+                markPageReady();
+                hide({ force: true });
+            });
             window.addEventListener('pageshow', (event) => {
-                if (event.persisted) {
-                    hide({ force: true });
-                    pageReady = true;
-                    render();
-                }
+                hide({ force: true });
+                pageReady = true;
+                render();
             });
             if (document.readyState === 'complete') {
                 markPageReady();
+                hide({ force: true });
             }
 
             const sameOriginUrl = (value) => {
@@ -371,6 +373,9 @@
                     || /\/collect\/status\/?$/.test(path)
                     || /\/collect\/auto\/?$/.test(path)
                     || /\/collect\/now\/?$/.test(path)
+                    || /\/desktop\/updater\/status\/?$/.test(path)
+                    || /\/desktop\/updater\/check\/?$/.test(path)
+                    || /\/desktop\/updater\/install\/?$/.test(path)
                     || /\/desktop\/update\//.test(path);
             };
 
@@ -718,37 +723,5 @@
         })();
     </script>
 
-    @if (config('nativephp-internal.running'))
-        @php($autoCollectMinutes = max(1, (int) config('biometric.collection_interval_minutes', 5)))
-        <script>
-            (function () {
-                const intervalMs = {{ $autoCollectMinutes }} * 60 * 1000;
-                const url = @json(route('collect.auto'));
-                const token = document.querySelector('meta[name="csrf-token"]')?.content;
-
-                async function runAutoCollect() {
-                    if (! token) {
-                        return;
-                    }
-                    try {
-                        await fetch(url, {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRF-TOKEN': token,
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest',
-                            },
-                            credentials: 'same-origin',
-                        });
-                    } catch (_) {
-                        //
-                    }
-                }
-
-                runAutoCollect();
-                setInterval(runAutoCollect, intervalMs);
-            })();
-        </script>
-    @endif
 </body>
 </html>

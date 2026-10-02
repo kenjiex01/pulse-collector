@@ -17,10 +17,11 @@ class DesktopUpdaterController extends Controller
 
     public function check(): JsonResponse
     {
-        $this->updater->checkForUpdates();
+        $queued = $this->updater->requestBackgroundCheck();
 
         return response()->json([
             'ok' => true,
+            'queued' => $queued,
             'status' => $this->updater->status(),
         ]);
     }

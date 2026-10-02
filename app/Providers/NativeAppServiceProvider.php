@@ -19,7 +19,7 @@ class NativeAppServiceProvider implements ProvidesPhpIni
             ->minHeight(600);
 
         try {
-            app(DesktopUpdaterService::class)->checkForUpdates();
+            app(DesktopUpdaterService::class)->requestBackgroundCheck();
         } catch (\Throwable) {
             // Ignore updater failures so the dashboard still loads.
         }

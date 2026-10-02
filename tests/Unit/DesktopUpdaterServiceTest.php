@@ -86,4 +86,16 @@ class DesktopUpdaterServiceTest extends TestCase
 
         $this->assertFalse(app(DesktopUpdaterService::class)->enabled());
     }
+
+    public function test_request_background_check_is_no_op_when_updater_disabled(): void
+    {
+        Cache::flush();
+
+        config([
+            'nativephp.updater.enabled' => true,
+            'nativephp-internal.running' => false,
+        ]);
+
+        $this->assertFalse(app(DesktopUpdaterService::class)->requestBackgroundCheck());
+    }
 }

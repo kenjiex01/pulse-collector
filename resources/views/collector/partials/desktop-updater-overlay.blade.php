@@ -247,12 +247,12 @@
                 e.stopPropagation();
             }, true);
 
-            triggerCheck();
             refreshStatus();
             schedulePoll(active ? 1500 : 10000);
             if (active) {
                 document.documentElement.style.overflow = 'hidden';
             }
+            window.setTimeout(triggerCheck, 60 * 1000);
             window.setInterval(triggerCheck, 5 * 60 * 1000);
         })();
     </script>
