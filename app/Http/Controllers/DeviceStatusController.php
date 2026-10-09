@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Models\BiometricDevice;
+use App\Services\BiometricDeviceMemoryStatsService;
 use App\Services\BiometricDeviceReachabilityService;
 use App\Support\CollectRunTracker;
 use Illuminate\Http\JsonResponse;
 
 class DeviceStatusController extends Controller
 {
-    public function index(BiometricDeviceReachabilityService $reachability, CollectRunTracker $tracker): JsonResponse
-    {
+    public function index(
+        BiometricDeviceReachabilityService $reachability,
+        BiometricDeviceMemoryStatsService $memoryStats,
+        CollectRunTracker $tracker,
+    ): JsonResponse {
         $devices = BiometricDevice::query()
             ->orderBy('campus_id')
             ->orderBy('name')
@@ -19,7 +23,17 @@ class DeviceStatusController extends Controller
         $collecting = $tracker->isRunning();
         $checks = $collecting ? [] : $reachability->checkMany($devices);
 
-        $payload = $devices->map(function (BiometricDevice $device) use ($checks, $collecting): array {
+        $storageByDevice = [];
+        if (! $collecting) {
+            $onlineDevices = $devices->filter(function (BiometricDevice $device) use ($checks): bool {
+                $check = $checks[$device->id] ?? null;
+
+                return $device->is_active && is_array($check) && ($check['online'] ?? false);
+            });
+            $storageByDevice = $memoryStats->readMany($onlineDevices);
+        }
+
+        $payload = $devices->map(function (BiometricDevice $device) use ($checks, $collecting, $storageByDevice): array {
             $check = $checks[$device->id] ?? [
                 'online' => ! $collecting,
                 'latency_ms' => null,
@@ -27,6 +41,8 @@ class DeviceStatusController extends Controller
                 'status_label' => $collecting ? 'collecting' : 'offline',
                 'checked_at' => now()->toIso8601String(),
             ];
+
+            $storage = $storageByDevice[(string) $device->id] ?? null;
 
             return [
                 'id' => $device->id,
@@ -41,6 +57,7 @@ class DeviceStatusController extends Controller
                 'disabled' => ! $device->is_active,
                 'last_error' => $device->last_error,
                 'last_collected_at' => $device->last_collected_at?->toIso8601String(),
+                'storage' => $storage,
             ];
         })->values();
 

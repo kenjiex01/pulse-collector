@@ -22,6 +22,11 @@ class CollectorInstallation extends Model
 
     public static function current(): self
     {
-        return static::query()->firstOrCreate([], ['name' => null]);
+        $defaultMonths = max(1, (int) config('biometric.logs.retention.default_months', 2));
+
+        return static::query()->firstOrCreate([], [
+            'name' => null,
+            'log_retention_months' => $defaultMonths,
+        ]);
     }
 }

@@ -180,23 +180,34 @@ final class Session
      */
     public function readSizes(): array
     {
-        $response = $this->command(Command::GetFreeSizes);
-
-        if (! $response->isOk()) {
-            throw ResponseException::commandRejected(Command::GetFreeSizes->value);
-        }
-
+        $payload = $this->readFreeSizesPayload();
         $sizes = ['users' => 0, 'fingers' => 0, 'records' => 0];
 
-        if (strlen($response->payload) >= 80) {
+        if (strlen($payload) >= 80) {
             /** @var list<int> $fields */
-            $fields = array_values(unpack('V20', substr($response->payload, 0, 80)));
+            $fields = array_values(unpack('V20', substr($payload, 0, 80)));
             $sizes['users'] = $fields[4];
             $sizes['fingers'] = $fields[6];
             $sizes['records'] = $fields[8];
         }
 
         return $sizes;
+    }
+
+    /**
+     * Raw CMD_GET_FREE_SIZES payload (80–92+ bytes on most terminals).
+     *
+     * @throws ResponseException when the device rejects the request.
+     */
+    public function readFreeSizesPayload(): string
+    {
+        $response = $this->command(Command::GetFreeSizes);
+
+        if (! $response->isOk()) {
+            throw ResponseException::commandRejected(Command::GetFreeSizes->value);
+        }
+
+        return $response->payload;
     }
 
     /**

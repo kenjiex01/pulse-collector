@@ -153,6 +153,14 @@ final class Device
         return new DeviceInfoService($this->requireSession());
     }
 
+    /**
+     * @throws \ZkTeco\Exceptions\ResponseException when the device rejects the request.
+     */
+    public function readFreeSizesPayload(): string
+    {
+        return $this->requireSession()->readFreeSizesPayload();
+    }
+
     public function realtime(): RealtimeService
     {
         return new RealtimeService($this->requireSession());

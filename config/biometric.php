@@ -43,6 +43,7 @@ return [
         'retention' => [
             'archive_dir' => env('BIOMETRIC_DELETED_LOGS_DIR', 'biometric-deleted-logs'),
             'chunk_size' => max(50, (int) env('BIOMETRIC_RETENTION_CHUNK_SIZE', 500)),
+            'default_months' => max(1, (int) env('BIOMETRIC_LOG_RETENTION_MONTHS', 2)),
             'min_months' => 1,
             'max_months' => 120,
         ],

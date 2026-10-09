@@ -57,7 +57,7 @@
 
     <div class="card">
         <h2>Log retention</h2>
-        <p class="muted">Keep collected punches from the last N months (from today). Save only stores the setting. Older rows are archived as JSON and removed on the next Collect now / auto-collect.</p>
+        <p class="muted">Keep collected punches from the last N months (from today). Default is <strong>2 months</strong>. Save only stores the setting. Older rows are archived as JSON and removed on the next Collect now / auto-collect.</p>
         <form method="post" action="{{ route('settings.log-retention') }}">
             @csrf
             <label for="log_retention_months">Months to keep</label>
@@ -71,7 +71,7 @@
                     min="{{ $logRetentionMinMonths }}"
                     max="{{ $logRetentionMaxMonths }}"
                     step="1"
-                    placeholder="e.g. 3"
+                    placeholder="e.g. 2"
                 >
                 <button type="submit" class="secondary">Save retention</button>
             </div>
@@ -172,6 +172,7 @@
                         <th>IP address</th>
                         <th>Last collect</th>
                         <th>Connectivity</th>
+                        <th>Device storage (attendance)</th>
                         <th>Last collect error</th>
                         <th class="actions-col">Actions</th>
                     </tr>
@@ -196,6 +197,13 @@
                                 data-device-id="{{ $device->id }}"
                             >
                                 @include('collector.partials.device-status-badge', ['status' => $deviceStatuses[$device->id] ?? null])
+                            </td>
+                            <td
+                                class="device-storage-cell muted"
+                                data-device-id="{{ $device->id }}"
+                                style="font-size: 0.8125rem;"
+                            >
+                                —
                             </td>
                             <td
                                 class="device-collect-error-cell"
@@ -316,6 +324,42 @@
                         + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
                 }
 
+                function formatNumber(value) {
+                    if (value == null || Number.isNaN(Number(value))) {
+                        return null;
+                    }
+                    return Number(value).toLocaleString();
+                }
+
+                function renderStorage(device) {
+                    const span = document.createElement('span');
+                    span.className = 'device-storage-label';
+                    const storage = device.storage;
+
+                    if (!storage || !storage.available) {
+                        span.textContent = '—';
+                        span.title = storage?.message || device.message || 'Storage stats load when the device is online.';
+                        return span;
+                    }
+
+                    const used = formatNumber(storage.attendance_used);
+                    const cap = formatNumber(storage.attendance_capacity);
+                    const free = formatNumber(storage.attendance_free);
+
+                    if (cap != null && free != null) {
+                        span.textContent = used + ' / ' + cap + ' (' + free + ' free)';
+                        span.title = 'Attendance logs on device: used / capacity (free slots).';
+                    } else if (used != null) {
+                        span.textContent = used + ' on device';
+                        span.title = storage.message || 'Used count only; capacity not reported by this firmware.';
+                    } else {
+                        span.textContent = '—';
+                        span.title = storage.message || '';
+                    }
+
+                    return span;
+                }
+
                 function renderCollectError(error) {
                     if (error) {
                         const span = document.createElement('span');
@@ -343,6 +387,12 @@
                             badgeEl.textContent = badge.label;
                             badgeEl.title = badge.title;
                         }
+                    });
+                    document.querySelectorAll('.device-storage-cell').forEach(cell => {
+                        const id = cell.getAttribute('data-device-id');
+                        const device = map[id];
+                        if (!device) return;
+                        cell.replaceChildren(renderStorage(device));
                     });
                     document.querySelectorAll('.device-collect-error-cell').forEach(cell => {
                         const id = cell.getAttribute('data-device-id');

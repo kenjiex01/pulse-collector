@@ -19,6 +19,13 @@ class BiometricCollectNowTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_new_installation_defaults_log_retention_to_two_months(): void
+    {
+        $installation = CollectorInstallation::current();
+
+        $this->assertSame(2, $installation->log_retention_months);
+    }
+
     public function test_collect_now_returns_json_instead_of_server_error_when_collect_throws(): void
     {
         CollectorInstallation::current()->update([
@@ -72,6 +79,8 @@ class BiometricCollectNowTest extends TestCase
 
     public function test_collect_now_is_blocked_when_retention_months_are_not_set(): void
     {
+        CollectorInstallation::current()->update(['log_retention_months' => null]);
+
         $response = $this->postJson(route('collect.now'));
 
         $response->assertOk()
@@ -84,6 +93,8 @@ class BiometricCollectNowTest extends TestCase
 
     public function test_auto_collect_is_blocked_when_retention_months_are_not_set(): void
     {
+        CollectorInstallation::current()->update(['log_retention_months' => null]);
+
         $response = $this->postJson(route('collect.auto'));
 
         $response->assertOk()
