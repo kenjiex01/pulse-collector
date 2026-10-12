@@ -88,6 +88,40 @@ class ZkTecoDeviceReader
     }
 
     /**
+     * Erase the full attendance log on the device (CMD_CLEAR_ATTLOG).
+     * Users and fingerprints are left in place.
+     */
+    public function clearAttendance(BiometricDevice $device): void
+    {
+        if (! class_exists(Device::class)) {
+            throw new \RuntimeException(
+                'ZkTeco library is missing. Rebuild the desktop app after fetching lib/zkteco-php (bash scripts/fetch-zkteco.sh && composer dump-autoload -o).',
+            );
+        }
+
+        $zkDevice = new Device(
+            host: $device->ip_address,
+            port: $device->port,
+            commKey: $device->comm_key,
+            timeout: (float) config('biometric.device.timeout_seconds', 10),
+        );
+
+        try {
+            $zkDevice->session(function (Device $connected): void {
+                $connected->attendance()->clear();
+            });
+        } catch (Throwable $exception) {
+            Log::warning('ZkTeco attendance clear failed.', [
+                'device_id' => $device->id,
+                'ip' => $device->ip_address,
+                'message' => $exception->getMessage(),
+            ]);
+
+            throw $exception;
+        }
+    }
+
+    /**
      * @return list<array{
      *     device_uid: int,
      *     user_id: string,

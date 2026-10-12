@@ -185,13 +185,79 @@ class BiometricLogCollector
     private function collectFromDevice(BiometricDevice $device): array
     {
         $snapshot = $this->reader->fetchDeviceSnapshot($device);
-        $snapshot['attendance'] = $this->filterAttendanceByStartDate($snapshot['attendance']);
+        $deviceAttendance = $snapshot['attendance'];
+        $snapshot['attendance'] = $this->filterAttendanceByStartDate($deviceAttendance);
 
         $userMap = $this->userSync->sync($device, $snapshot['users']);
 
         $inserted = $this->insertAttendanceRecords($device, $snapshot['attendance'], $userMap);
+        $this->clearDeviceAttendanceAfterBackup($device, $deviceAttendance, $userMap);
 
         return ['logs_inserted' => $inserted];
+    }
+
+    /**
+     * At month-end, if the device still holds a punch older than retention, back up
+     * every attendance row to JSON, verify the expired punches are in that file,
+     * then erase the device attendance log. ZKTeco has no delete-by-date command.
+     * Recent punches stay in Pulse. A missed month-end is caught up on the next collect.
+     *
+     * @param  list<array{
+     *     device_uid: ?int,
+     *     user_id: string,
+     *     punched_at: mixed,
+     *     verify_mode: ?string,
+     *     punch_state: ?string,
+     * }>  $records
+     * @param  array<string, array{name: ?string, card_number: ?string}>  $userMap
+     */
+    private function clearDeviceAttendanceAfterBackup(BiometricDevice $device, array $records, array $userMap): void
+    {
+        $months = $this->installation->logRetentionMonths();
+        $retention = app(BiometricLogRetentionService::class);
+
+        if ($months === null || ! $retention->deviceAttendanceClearIsDue($device->attendance_cleared_through_month)) {
+            return;
+        }
+
+        $wallCutoff = $retention->wallClockCutoff($months);
+        $hasExpired = false;
+
+        foreach ($records as $record) {
+            if ($retention->isBeforeWallClockCutoff($record['punched_at'] ?? null, $wallCutoff)) {
+                $hasExpired = true;
+                break;
+            }
+        }
+
+        $settledMonth = $retention->deviceAttendanceClearMonth();
+
+        if (! $hasExpired) {
+            $device->forceFill([
+                'attendance_cleared_through_month' => $settledMonth,
+            ])->save();
+
+            return;
+        }
+
+        $files = $retention->archiveDeviceAttendanceBeforeClear($device, $records, $months, $wallCutoff, $userMap);
+
+        if ($files === []) {
+            throw new \RuntimeException('Device attendance backup was not written. Device logs were not deleted.');
+        }
+
+        $this->reader->clearAttendance($device);
+
+        $device->forceFill([
+            'attendance_cleared_through_month' => $settledMonth,
+        ])->save();
+
+        Log::info('Cleared ZKTeco attendance after JSON backup.', [
+            'device_id' => $device->id,
+            'month' => $settledMonth,
+            'files' => $files,
+            'records' => count($records),
+        ]);
     }
 
     /**

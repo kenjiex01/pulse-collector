@@ -10,6 +10,7 @@ use App\Listeners\RestartBiometricAutoCollectWorker;
 use App\Listeners\StartBiometricScheduleWorker;
 use App\Services\DesktopUpdaterService;
 use App\Support\EncryptedEnv;
+use Illuminate\Database\Events\ConnectionEstablished;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -65,6 +66,10 @@ class AppServiceProvider extends ServiceProvider
             $view->with('desktopUpdater', $updater);
         });
 
+        Event::listen(function (ConnectionEstablished $event): void {
+            $this->enableSqliteWal($event);
+        });
+
         Event::listen(ApplicationBooted::class, StartBiometricScheduleWorker::class);
         Event::listen(ProcessExited::class, RestartBiometricAutoCollectWorker::class);
 
@@ -84,6 +89,28 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(UpdateDownloaded::class, [$listener, 'handleUpdateDownloaded']);
         Event::listen(UpdateNotAvailable::class, [$listener, 'handleUpdateNotAvailable']);
         Event::listen(Error::class, [$listener, 'handleError']);
+    }
+
+    /**
+     * Let page reads continue while a background collect is writing the same SQLite file.
+     */
+    private function enableSqliteWal(ConnectionEstablished $event): void
+    {
+        $connection = $event->connection;
+
+        if ($connection->getDriverName() !== 'sqlite') {
+            return;
+        }
+
+        $database = (string) $connection->getDatabaseName();
+
+        if ($database === '' || $database === ':memory:') {
+            return;
+        }
+
+        $connection->statement('PRAGMA journal_mode=WAL');
+        $connection->statement('PRAGMA synchronous=NORMAL');
+        $connection->statement('PRAGMA busy_timeout=5000');
     }
 
     private function isNativeDesktop(): bool

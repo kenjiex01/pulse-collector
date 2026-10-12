@@ -57,7 +57,7 @@
 
     <div class="card">
         <h2>Log retention</h2>
-        <p class="muted">Keep collected punches from the last N months (from today). Default is <strong>2 months</strong>. Save only stores the setting. Older rows are archived as JSON and removed on the next Collect now / auto-collect.</p>
+        <p class="muted">Keep punches from the last N months (from today). Default is <strong>2 months</strong>. Save only stores the setting. On each collect, older punches are saved as JSON and removed from this PC. The time clock itself is cleared only at the <strong>end of the month</strong> (or on the next collect if that day was missed), and only when it still has a punch older than the cutoff. Pulse writes a JSON backup first and checks that those old punches are in the file. ZKTeco can only clear the whole attendance log, so newer punches on the clock are included in that same backup and stay in Pulse. Users and fingerprints are not removed. If the backup cannot be saved, the clock is not cleared.</p>
         <form method="post" action="{{ route('settings.log-retention') }}">
             @csrf
             <label for="log_retention_months">Months to keep</label>
@@ -81,8 +81,8 @@
         </form>
         <p class="muted" style="margin-top: 0.75rem;">
             @if ($logRetentionMonths)
-                Logs punched before <strong>{{ now()->subMonthsNoOverflow($logRetentionMonths)->toDateString() }}</strong>
-                will be archived, then deleted on the next collect. Leave the field empty and save to keep all logs (collect stays blocked).
+                Punches before <strong>{{ now()->subMonthsNoOverflow($logRetentionMonths)->toDateString() }}</strong>
+                are archived as JSON and removed from this PC on the next collect. They are cleared from the time clock at the end of the month, only after a JSON backup of those punches is saved and checked. Leave the field empty and save to keep all logs (collect stays blocked).
             @else
                 No retention set. Manual Collect now and automatic collection are blocked until you enter a month window.
             @endif
@@ -96,14 +96,14 @@
         <h2>Collection schedule</h2>
         <p class="muted" style="margin:0;">
             Pulls logs from devices automatically every <strong>{{ $collectIntervalMinutes }}</strong> minute(s) while this desktop app is open
-            (background worker). Manual <strong>Collect now</strong> also runs in the background so the dashboard stays usable.
+            (background worker). <strong>Collect now</strong> also runs in the background. You can open Collected logs, Download DTR, and the other screens while a collect is running. Leave Pulse open until it finishes.
             New punches upload to S3 as <code>.json.gzip</code> files.
         </p>
         <p class="muted" style="margin:0.65rem 0 0; font-size:0.875rem;">
             The auto-collect worker starts when the app opens. Change the interval with
             <code>BIOMETRIC_COLLECT_INTERVAL_MINUTES</code> in <code>.env</code>, then restart the app.
         </p>
-        <form method="post" action="{{ route('collect.now') }}" style="margin-top: 1rem;" data-manual-collect-form data-collect-status-url="{{ route('collect.status') }}" data-no-loader>
+        <form method="post" action="{{ route('collect.now') }}" style="margin-top: 1rem;" data-manual-collect-form data-collect-status-url="{{ route('collect.status') }}" data-collect-running="{{ ! empty($collectRunning) ? '1' : '0' }}" data-no-loader>
             @csrf
             <button type="submit" data-manual-collect-submit>Collect now (manual)</button>
         </form>
@@ -505,7 +505,7 @@
                 setProgress({
                     label: 'Starting manual collect…',
                     percent: value,
-                    meta: 'Please wait — do not close the app',
+                    meta: 'Running in the background. You can open other screens. Leave Pulse open.',
                     indeterminate: false,
                 });
                 fakeTimer = window.setInterval(() => {
@@ -521,6 +521,30 @@
                 }, 400);
             };
 
+            if (form.getAttribute('data-collect-running') === '1') {
+                startFakeProgress();
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = 'Collecting…';
+                }
+                const statusUrl = form.getAttribute('data-collect-status-url');
+                if (statusUrl) {
+                    pollCollectStatus(statusUrl).then((finished) => {
+                        stopFakeProgress();
+                        finishCollect(finished);
+                    }).catch((error) => {
+                        stopFakeProgress();
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.textContent = 'Collect now (manual)';
+                        }
+                        if (metaEl) {
+                            metaEl.textContent = error?.message || 'Collection status could not be read.';
+                        }
+                    });
+                }
+            }
+
             form.addEventListener('submit', async (event) => {
                 event.preventDefault();
                 if (submitBtn?.disabled) {
@@ -534,10 +558,6 @@
 
                 startFakeProgress();
                 window.__biometricCollecting = true;
-                window.CollectorLoader?.show(
-                    'Collecting logs from devices… This can take several minutes.',
-                    { sticky: true }
-                );
 
                 const statusUrl = form.getAttribute('data-collect-status-url');
                 let keepLoader = false;
@@ -609,7 +629,6 @@
 
                     if (payload.message && metaEl) {
                         metaEl.textContent = payload.message;
-                        window.CollectorLoader?.show(payload.message, { sticky: true });
                     }
                 }
 
@@ -635,7 +654,6 @@
                     return false;
                 }
 
-                window.CollectorLoader?.show('Reloading dashboard…', { sticky: true });
                 window.setTimeout(() => {
                     window.location.reload();
                 }, 900);

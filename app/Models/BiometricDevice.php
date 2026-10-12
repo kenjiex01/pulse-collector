@@ -19,6 +19,7 @@ class BiometricDevice extends Model
         'is_active',
         'last_collected_at',
         'last_error',
+        'attendance_cleared_through_month',
     ];
 
     protected function casts(): array

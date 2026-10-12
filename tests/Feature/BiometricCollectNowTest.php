@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\BiometricDevice;
+use App\Models\Campus;
 use App\Models\CollectorInstallation;
+use App\Services\BiometricDeviceReachabilityService;
 use App\Services\BiometricLogCollector;
 use App\Support\CollectRunTracker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -49,6 +52,33 @@ class BiometricCollectNowTest extends TestCase
             CollectRunTracker::STATE_FAILED,
             app(CollectRunTracker::class)->current()['state'],
         );
+    }
+
+    public function test_dashboard_loads_without_contacting_devices(): void
+    {
+        $campus = Campus::query()->create([
+            'code' => 'SM',
+            'name' => 'San Mateo',
+            'is_active' => true,
+        ]);
+
+        BiometricDevice::query()->create([
+            'campus_id' => $campus->id,
+            'name' => 'Main gate',
+            'model' => 'K30',
+            'ip_address' => '192.0.2.50',
+            'port' => 4370,
+            'is_active' => true,
+        ]);
+
+        $this->mock(BiometricDeviceReachabilityService::class, function ($mock): void {
+            $mock->shouldNotReceive('checkMany');
+        });
+
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('checking…')
+            ->assertSee('You can open Collected logs');
     }
 
     public function test_collect_status_reports_idle_by_default(): void

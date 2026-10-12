@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\BiometricDevice;
 use App\Models\LogExportBatch;
-use App\Services\BiometricDeviceReachabilityService;
 use App\Services\BiometricLogCollector;
 use App\Services\BiometricLogRetentionService;
 use App\Services\CollectorInstallationService;
@@ -32,13 +31,13 @@ class CollectorDashboardController extends Controller
             ->limit(20)
             ->get();
 
-        $deviceStatuses = app(BiometricDeviceReachabilityService::class)->checkMany($devices);
-
         $collectIntervalMinutes = max(1, (int) config('biometric.collection_interval_minutes', 5));
+        $collecting = app(CollectRunTracker::class)->isRunning();
 
         return view('collector.dashboard', [
             'devices' => $devices,
-            'deviceStatuses' => $deviceStatuses,
+            'deviceStatuses' => [],
+            'collectRunning' => $collecting,
             'recentExports' => $recentExports,
             's3Configured' => app(\App\Services\BiometricLogS3Uploader::class)->isConfigured(),
             'collectIntervalMinutes' => $collectIntervalMinutes,
