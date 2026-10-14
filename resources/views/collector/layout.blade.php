@@ -373,10 +373,100 @@
                     || /\/collect\/status\/?$/.test(path)
                     || /\/collect\/auto\/?$/.test(path)
                     || /\/collect\/now\/?$/.test(path)
+                    || /\/dtr\/download\/?$/.test(path)
                     || /\/desktop\/updater\/status\/?$/.test(path)
                     || /\/desktop\/updater\/check\/?$/.test(path)
                     || /\/desktop\/updater\/install\/?$/.test(path)
                     || /\/desktop\/update\//.test(path);
+            };
+
+            const filenameFromDisposition = (disposition) => {
+                const match = String(disposition || '').match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+
+                if (! match) {
+                    return '';
+                }
+
+                try {
+                    return decodeURIComponent((match[1] || match[2] || '').trim());
+                } catch (_error) {
+                    return (match[1] || match[2] || '').trim();
+                }
+            };
+
+            const saveDownloadBytes = (bytes, filename) => {
+                const safeName = (filename || 'download.csv').replace(/[\\/:*?"<>|]/g, '_');
+
+                try {
+                    const fs = window.require?.('fs');
+                    const path = window.require?.('path');
+                    const os = window.require?.('os');
+                    const electron = window.require?.('electron');
+
+                    if (fs && path && os) {
+                        const downloads = path.join(os.homedir(), 'Downloads');
+                        fs.mkdirSync(downloads, { recursive: true });
+                        const extension = path.extname(safeName);
+                        const base = path.basename(safeName, extension);
+                        let target = path.join(downloads, safeName);
+
+                        if (fs.existsSync(target)) {
+                            target = path.join(downloads, `${base}-${Date.now()}${extension}`);
+                        }
+
+                        fs.writeFileSync(target, Buffer.from(bytes));
+                        electron?.shell?.showItemInFolder?.(target);
+
+                        return;
+                    }
+                } catch (_error) {
+                    // Fall back to a browser download link.
+                }
+
+                const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
+                const objectUrl = URL.createObjectURL(blob);
+                const anchor = document.createElement('a');
+                anchor.href = objectUrl;
+                anchor.download = safeName;
+                anchor.rel = 'noopener';
+                document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+            };
+
+            const downloadFormAsFile = async (form) => {
+                show('Downloading…');
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: (form.method || 'POST').toUpperCase(),
+                        body: new FormData(form),
+                        credentials: 'same-origin',
+                        headers: {
+                            Accept: 'text/csv,application/octet-stream,application/json,*/*',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    const buffer = await response.arrayBuffer();
+                    const bytes = new Uint8Array(buffer);
+                    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                    const looksLikeHtml = contentType.includes('text/html')
+                        || (bytes.length > 0 && bytes[0] === 0x3c);
+
+                    if (! response.ok || looksLikeHtml) {
+                        throw new Error('Could not download the file. Check the date range and selected users, then try again.');
+                    }
+
+                    const filename = filenameFromDisposition(response.headers.get('content-disposition'))
+                        || 'dtr.csv';
+                    saveDownloadBytes(bytes, filename);
+                } catch (error) {
+                    window.alert(error?.message || 'Download failed.');
+                } finally {
+                    hide({ force: true });
+                }
             };
 
             document.addEventListener('click', (event) => {
@@ -419,6 +509,12 @@
                     return;
                 }
                 if (form.target === '_blank') {
+                    return;
+                }
+                if (form.dataset.fileDownload !== undefined) {
+                    event.preventDefault();
+                    downloadFormAsFile(form);
+
                     return;
                 }
                 show('Saving…');

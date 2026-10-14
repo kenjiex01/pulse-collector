@@ -15,7 +15,7 @@
             (<code>Employee: Name (user id)</code> blocks with Date / In / Out columns) compatible with Cainta-style DTR uploads.
         </p>
 
-        <form method="post" action="{{ route('dtr.download') }}" id="dtr-download-form" style="margin-top:1rem;">
+        <form method="post" action="{{ route('dtr.download') }}" id="dtr-download-form" data-file-download style="margin-top:1rem;">
             @csrf
 
             <div class="logs-filter-grid" style="margin-bottom:1rem;">

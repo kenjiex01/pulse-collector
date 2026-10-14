@@ -22,6 +22,7 @@ class DtrDownloadTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Download DTR');
+        $response->assertSee('data-file-download', false);
         $response->assertSee((string) $device->id.':1001');
     }
 

@@ -247,7 +247,7 @@ def main():
         "Pulse sends logs to the cloud. In People360 you must pull biometric logs under Time Logs before they are used in payroll.",
     )
 
-    add_para(doc, "Guide date: 12 October 2026. App: Pulse Biometric Collector 1.0.3.")
+    add_para(doc, "App: Pulse Biometric Collector.")
 
     doc.save(OUT)
     print(f"Wrote {OUT} ({OUT.stat().st_size} bytes)")
