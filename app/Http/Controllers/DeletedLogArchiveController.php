@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\BiometricDeletedLogArchiveService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\View\View;
 use RuntimeException;
 use Throwable;
@@ -21,6 +22,55 @@ class DeletedLogArchiveController extends Controller
             'archives' => $this->archives->listArchives(),
             'archiveDirectory' => app(\App\Services\BiometricLogRetentionService::class)->archiveDirectoryName(),
         ]);
+    }
+
+    public function backupLogs(Request $request, string $filename): View|RedirectResponse
+    {
+        try {
+            $backup = $this->archives->backupLogs($filename);
+        } catch (RuntimeException $exception) {
+            return redirect()
+                ->route('archives.index')
+                ->with('error', $exception->getMessage());
+        }
+
+        $page = max(1, (int) $request->input('page', 1));
+        $perPage = 50;
+        $logs = $backup['logs'];
+        $slice = array_slice($logs, ($page - 1) * $perPage, $perPage);
+        $paginator = new LengthAwarePaginator(
+            $slice,
+            count($logs),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        return view('collector.archives.backup-logs', [
+            'filename' => $filename,
+            'payload' => $backup['payload'],
+            'logs' => $paginator,
+        ]);
+    }
+
+    public function restore(string $filename): RedirectResponse
+    {
+        try {
+            $result = $this->archives->restoreIntoCollector($filename);
+        } catch (Throwable $exception) {
+            return redirect()
+                ->route('archives.index')
+                ->with('error', $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('archives.index')
+            ->with('success', sprintf(
+                'Restored into this collector: %d punch(es) added, %d already present, %d could not be matched to a local device. The time clock cannot accept old punches back.',
+                $result['inserted'],
+                $result['skipped_duplicates'],
+                $result['skipped_unmatched'],
+            ));
     }
 
     public function download(string $filename)

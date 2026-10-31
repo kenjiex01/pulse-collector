@@ -45,6 +45,12 @@ Route::post('/dtr/download', [DtrDownloadController::class, 'download'])->name('
 Route::get('/archives', [DeletedLogArchiveController::class, 'index'])->name('archives.index');
 Route::get('/archives/upload', [DeletedLogArchiveController::class, 'uploadForm'])->name('archives.upload');
 Route::post('/archives/upload', [DeletedLogArchiveController::class, 'upload'])->name('archives.upload.store');
+Route::get('/archives/{filename}/backup-logs', [DeletedLogArchiveController::class, 'backupLogs'])
+    ->where('filename', '[^/]+')
+    ->name('archives.backup-logs');
+Route::post('/archives/{filename}/restore', [DeletedLogArchiveController::class, 'restore'])
+    ->where('filename', '[^/]+')
+    ->name('archives.restore');
 Route::get('/archives/{filename}/download', [DeletedLogArchiveController::class, 'download'])
     ->where('filename', '[^/]+')
     ->name('archives.download');

@@ -4,15 +4,28 @@ namespace App\Services;
 
 use App\Models\BiometricAttendanceLog;
 use App\Models\BiometricDeviceUser;
+use App\Support\SpreadsheetDownload;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use RuntimeException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class DtrExportService
 {
-    private const MAX_IN_OUT_PAIRS = 5;
+    private const MAX_IN_OUT_PAIRS = 6;
+
+    private const COMPANY_NAME = 'ICCT COLLEGES FOUNDATION INC.';
+
+    private const COMPANY_ADDRESS = 'ICCT Bldg., Cabrera Rd. Cor. Manila East Rd. Brgy. San Juan, Taytay, Rizal';
+
+    private const COMPANY_CONTACT = 'Telephone: 8.423.18.41 / 7.978.42.28, Website: www.icct.edu.ph, Email: taytay@icct.edu.ph';
 
     /** @var list<string> */
     private const IN_PUNCH_STATES = [
@@ -65,7 +78,7 @@ class DtrExportService
         return $parsed;
     }
 
-    public function downloadResponse(Carbon $dateFrom, Carbon $dateTo, array $userKeys): StreamedResponse
+    public function downloadResponse(Carbon $dateFrom, Carbon $dateTo, array $userKeys): StreamedResponse|BinaryFileResponse
     {
         if ($dateFrom->gt($dateTo)) {
             [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
@@ -77,62 +90,230 @@ class DtrExportService
             throw new RuntimeException('Select at least one enrolled user.');
         }
 
-        $filename = sprintf(
-            'dtr_%s_%s.csv',
+        $built = $this->buildWorkbooks($dateFrom, $dateTo, $selections);
+
+        if (count($built) === 1) {
+            return SpreadsheetDownload::stream($built[0]['spreadsheet'], $built[0]['filename']);
+        }
+
+        return $this->zipResponse($built, sprintf(
+            '%s_to_%s_timesheets',
             $dateFrom->format('Y-m-d'),
             $dateTo->format('Y-m-d'),
-        );
-
-        return response()->streamDownload(function () use ($dateFrom, $dateTo, $selections): void {
-            $handle = fopen('php://output', 'w');
-
-            if ($handle === false) {
-                throw new RuntimeException('Could not open DTR export stream.');
-            }
-
-            $this->writeCsv($handle, $dateFrom, $dateTo, $selections);
-
-            fclose($handle);
-        }, $filename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-        ]);
+        ));
     }
 
     /**
-     * @param  resource  $handle
      * @param  list<array{device_id: int, user_id: string}>  $selections
+     * @return list<array{spreadsheet: Spreadsheet, filename: string}>
      */
-    public function writeCsv($handle, Carbon $dateFrom, Carbon $dateTo, array $selections): void
+    public function buildWorkbooks(Carbon $dateFrom, Carbon $dateTo, array $selections): array
     {
         $profiles = $this->loadUserProfiles($selections);
         $logsByUser = $this->loadLogsGroupedByUser($dateFrom, $dateTo, $selections);
-        $period = CarbonPeriod::create($dateFrom->copy()->startOfDay(), $dateTo->copy()->startOfDay());
-
-        $firstBlock = true;
+        $workbooks = [];
 
         foreach ($selections as $selection) {
             $key = self::userKey($selection['device_id'], $selection['user_id']);
             $profile = $profiles->get($key);
             $displayName = trim((string) ($profile['name'] ?? ''));
             $displayName = $displayName !== '' ? $displayName : $selection['user_id'];
-            $userLogs = $logsByUser->get($key, collect());
-
-            if (! $firstBlock) {
-                fputcsv($handle, []);
-            }
-
-            $firstBlock = false;
-
-            fputcsv($handle, ['Employee: '.$displayName.' ('.$selection['user_id'].')']);
-            fputcsv($handle, $this->timesheetHeaderRow());
-
-            foreach ($period as $date) {
-                /** @var Carbon $date */
-                $dayKey = $date->format('Y-m-d');
-                $dayLogs = $userLogs->get($dayKey, collect());
-                fputcsv($handle, $this->timesheetDataRow($dayKey, $dayLogs));
-            }
+            $workbooks[] = [
+                'spreadsheet' => $this->buildTimesheet(
+                    $dateFrom,
+                    $dateTo,
+                    $displayName,
+                    $selection['user_id'],
+                    $logsByUser->get($key, collect()),
+                ),
+                'filename' => $this->workbookFilename($dateFrom, $dateTo, $displayName),
+            ];
         }
+
+        return $workbooks;
+    }
+
+    public function workbookFilename(Carbon $dateFrom, Carbon $dateTo, string $employeeName): string
+    {
+        $name = trim((string) preg_replace('/[^A-Za-z0-9]+/', '_', $employeeName), '_');
+        $name = $name !== '' ? $name : 'employee';
+
+        return sprintf(
+            '%s_to_%s_%s',
+            $dateFrom->format('Y-m-d'),
+            $dateTo->format('Y-m-d'),
+            $name,
+        );
+    }
+
+    /**
+     * @param  Collection<string, Collection<int, BiometricAttendanceLog>>  $logsByDay
+     */
+    public function buildTimesheet(
+        Carbon $dateFrom,
+        Carbon $dateTo,
+        string $employeeName,
+        string $userId,
+        Collection $logsByDay,
+    ): Spreadsheet {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle(Str::limit($employeeName, 31, ''));
+
+        $lastColumn = 'R';
+        $sheet->mergeCells("A1:{$lastColumn}1");
+        $sheet->mergeCells("A2:{$lastColumn}2");
+        $sheet->mergeCells("A3:{$lastColumn}3");
+        $sheet->mergeCells("A5:{$lastColumn}5");
+        $sheet->mergeCells("A6:{$lastColumn}6");
+
+        $sheet->setCellValue('A1', self::COMPANY_NAME);
+        $sheet->setCellValue('A2', self::COMPANY_ADDRESS);
+        $sheet->setCellValue('A3', self::COMPANY_CONTACT);
+        $sheet->setCellValue('A5', 'TIME SHEET REPORT');
+        $sheet->setCellValue('A6', sprintf(
+            'From %s to %s',
+            $dateFrom->format('F j, Y'),
+            $dateTo->format('F j, Y'),
+        ));
+        $sheet->setCellValue('A8', 'Employee: '.$employeeName.' ('.$userId.')');
+
+        $headers = ['Date'];
+        for ($pair = 1; $pair <= self::MAX_IN_OUT_PAIRS; $pair++) {
+            $headers[] = 'In '.$pair;
+            $headers[] = 'Out '.$pair;
+        }
+        array_push($headers, 'Hrs Required', 'TotHrs Break', 'Hrs Worked', 'Hrs OT', 'Hrs UT');
+
+        $headerRow = 9;
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue([$index + 1, $headerRow], $header);
+        }
+
+        $period = CarbonPeriod::create($dateFrom->copy()->startOfDay(), $dateTo->copy()->startOfDay());
+        $row = $headerRow + 1;
+        $daysPresent = 0;
+        $daysAbsent = 0;
+        $totalWorked = 0.0;
+
+        foreach ($period as $date) {
+            /** @var Carbon $date */
+            $dayKey = $date->format('Y-m-d');
+            $pairs = $this->pairPunchesForDay($logsByDay->get($dayKey, collect())->all());
+            $worked = $this->workedHours($pairs);
+            $hasPunch = $pairs !== [];
+
+            if ($hasPunch) {
+                $daysPresent++;
+            } else {
+                $daysAbsent++;
+            }
+
+            $totalWorked += $worked;
+            $values = [$date->format('m/d/Y')];
+
+            for ($pairIndex = 0; $pairIndex < self::MAX_IN_OUT_PAIRS; $pairIndex++) {
+                $pair = $pairs[$pairIndex] ?? ['in' => '', 'out' => ''];
+                $values[] = $this->displayTime($pair['in']);
+                $values[] = $this->displayTime($pair['out']);
+            }
+
+            array_push($values, '0.00', '0.00', number_format($worked, 2, '.', ''), '0.00', '0.00');
+
+            foreach ($values as $index => $value) {
+                $sheet->setCellValue([$index + 1, $row], $value);
+            }
+
+            $row++;
+        }
+
+        $totalRow = $row;
+        $sheet->setCellValue("A{$totalRow}", 'Total:');
+        $sheet->setCellValue("N{$totalRow}", '0.00');
+        $sheet->setCellValue("O{$totalRow}", '0.00');
+        $sheet->setCellValue("P{$totalRow}", number_format($totalWorked, 2, '.', ''));
+        $sheet->setCellValue("Q{$totalRow}", '0.00');
+        $sheet->setCellValue("R{$totalRow}", '0.00');
+
+        $summaryRow = $totalRow + 2;
+        $sheet->setCellValue("A{$summaryRow}", 'Days Present: '.$daysPresent);
+        $sheet->setCellValue("D{$summaryRow}", 'Days Absent: '.$daysAbsent);
+
+        $footer = $summaryRow + 2;
+        $workingDays = $daysPresent + $daysAbsent;
+        $sheet->setCellValue("A{$footer}", 'TOTAL EMPLOYEES: 1');
+        $sheet->setCellValue('A'.($footer + 1), 'Total Working Days: '.$workingDays);
+        $sheet->setCellValue('A'.($footer + 2), 'Total Holidays W/in the Period: 0');
+        $sheet->setCellValue('A'.($footer + 3), 'Total Hours Required: 0.00');
+
+        $sheet->getStyle("A1:{$lastColumn}3")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
+        $sheet->getStyle('A5:A6')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('A5')->getFont()->setBold(true);
+        $sheet->getStyle('A8')->getFont()->setBold(true);
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$headerRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A{$headerRow}:{$lastColumn}{$totalRow}")->applyFromArray([
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                ],
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+            ],
+        ]);
+        $sheet->getStyle("A{$totalRow}")->getFont()->setBold(true);
+        $sheet->getPageSetup()->setOrientation(\PhpOffice\PhpSpreadsheet\Worksheet\PageSetup::ORIENTATION_LANDSCAPE);
+        $sheet->getPageSetup()->setFitToWidth(1);
+        $sheet->getPageSetup()->setFitToHeight(0);
+
+        foreach (range('A', $lastColumn) as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        return $spreadsheet;
+    }
+
+    /**
+     * @param  list<array{spreadsheet: Spreadsheet, filename: string}>  $workbooks
+     */
+    private function zipResponse(array $workbooks, string $baseFilename): BinaryFileResponse
+    {
+        $zipPath = tempnam(sys_get_temp_dir(), 'dtr-zip-');
+
+        if ($zipPath === false) {
+            throw new RuntimeException('Could not create the DTR download.');
+        }
+
+        $zip = new ZipArchive();
+
+        if ($zip->open($zipPath, ZipArchive::OVERWRITE) !== true) {
+            throw new RuntimeException('Could not create the DTR download.');
+        }
+
+        $tempFiles = [];
+
+        try {
+            foreach ($workbooks as $workbook) {
+                $temp = tempnam(sys_get_temp_dir(), 'dtr-xlsx-');
+
+                if ($temp === false) {
+                    throw new RuntimeException('Could not create the DTR download.');
+                }
+
+                $tempFiles[] = $temp;
+                [$writer, $entryName] = SpreadsheetDownload::writerFor($workbook['spreadsheet'], $workbook['filename']);
+                $writer->save($temp);
+                $zip->addFile($temp, $entryName);
+                $workbook['spreadsheet']->disconnectWorksheets();
+            }
+        } finally {
+            $zip->close();
+        }
+
+        return response()->download($zipPath, $baseFilename.'.zip', [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 
     /**
@@ -194,42 +375,39 @@ class DtrExportService
     }
 
     /**
-     * @return list<string>
+     * @param  list<array{in: string, out: string}>  $pairs
      */
-    private function timesheetHeaderRow(): array
+    private function workedHours(array $pairs): float
     {
-        $columns = ['Date', ''];
+        $minutes = 0;
 
-        for ($pairIndex = 0; $pairIndex < self::MAX_IN_OUT_PAIRS; $pairIndex++) {
-            $columns[] = 'In';
-
-            if ($pairIndex < self::MAX_IN_OUT_PAIRS - 1) {
-                $columns[] = 'Out';
+        foreach ($pairs as $pair) {
+            if ($pair['in'] === '' || $pair['out'] === '') {
+                continue;
             }
+
+            $in = Carbon::createFromFormat('H:i:s', $pair['in']);
+            $out = Carbon::createFromFormat('H:i:s', $pair['out']);
+
+            if ($in === false || $out === false || $out->lessThan($in)) {
+                continue;
+            }
+
+            $minutes += $in->diffInMinutes($out);
         }
 
-        return $columns;
+        return round($minutes / 60, 2);
     }
 
-    /**
-     * @param  Collection<int, BiometricAttendanceLog>  $dayLogs
-     * @return list<string>
-     */
-    private function timesheetDataRow(string $date, Collection $dayLogs): array
+    private function displayTime(string $time): string
     {
-        $row = [$date, ''];
-        $pairs = $this->pairPunchesForDay($dayLogs->all());
-
-        for ($pairIndex = 0; $pairIndex < self::MAX_IN_OUT_PAIRS; $pairIndex++) {
-            $pair = $pairs[$pairIndex] ?? ['in' => '', 'out' => ''];
-            $row[] = $pair['in'];
-
-            if ($pairIndex < self::MAX_IN_OUT_PAIRS - 1) {
-                $row[] = $pair['out'];
-            }
+        if ($time === '') {
+            return '';
         }
 
-        return $row;
+        $parsed = Carbon::createFromFormat('H:i:s', $time);
+
+        return $parsed === false ? $time : strtolower($parsed->format('g:i a'));
     }
 
     /**

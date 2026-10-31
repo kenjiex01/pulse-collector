@@ -8,6 +8,7 @@ use App\Models\BiometricDeviceUser;
 use App\Models\Campus;
 use App\Services\DtrExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Tests\TestCase;
 
 class DtrDownloadTest extends TestCase
@@ -57,9 +58,21 @@ class DtrDownloadTest extends TestCase
         ]);
 
         $response->assertOk();
-        $response->assertDownload('dtr_2026-08-10_2026-08-10.csv');
-        $this->assertStringContainsString('Employee: Ana Reyes (1001)', $response->streamedContent());
-        $this->assertStringContainsString('08:00:00', $response->streamedContent());
+        $response->assertDownload('2026-08-10_to_2026-08-10_Ana_Reyes.xlsx');
+
+        $path = tempnam(sys_get_temp_dir(), 'dtr-test-');
+        file_put_contents($path, $response->streamedContent());
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        @unlink($path);
+
+        $this->assertSame('ICCT COLLEGES FOUNDATION INC.', $sheet->getCell('A1')->getValue());
+        $this->assertSame('TIME SHEET REPORT', $sheet->getCell('A5')->getValue());
+        $this->assertSame('Employee: Ana Reyes (1001)', $sheet->getCell('A8')->getValue());
+        $this->assertSame('In 1', $sheet->getCell('B9')->getValue());
+        $this->assertSame('Out 6', $sheet->getCell('M9')->getValue());
+        $this->assertSame('Hrs Worked', $sheet->getCell('P9')->getValue());
+        $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());
+        $this->assertSame('5:00 pm', $sheet->getCell('C10')->getValue());
     }
 
     public function test_dtr_download_requires_at_least_one_user(): void

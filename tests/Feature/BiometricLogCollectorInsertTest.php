@@ -175,7 +175,7 @@ class BiometricLogCollectorInsertTest extends TestCase
         );
     }
 
-    public function test_backs_up_device_attendance_json_before_clearing_expired_logs(): void
+    public function test_does_not_clear_device_attendance_when_collector_retention_prunes_old_punches(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-31 12:00:00', 'Asia/Manila'));
         CollectorInstallation::current()->update([
@@ -232,7 +232,7 @@ class BiometricLogCollectorInsertTest extends TestCase
                 ],
             ],
         ]);
-        $reader->shouldReceive('clearAttendance')->once();
+        $reader->shouldNotReceive('clearAttendance');
 
         $uploader = Mockery::mock(BiometricLogS3Uploader::class);
         $uploader->shouldReceive('isConfigured')->andReturn(false);
@@ -250,23 +250,17 @@ class BiometricLogCollectorInsertTest extends TestCase
 
         $this->assertSame([], $summary['errors']);
         $this->assertSame([], $second['errors']);
-        $this->assertSame('2026-08', $device->fresh()->attendance_cleared_through_month);
+        $this->assertNull($device->fresh()->attendance_cleared_through_month);
         $this->assertSame(1, BiometricAttendanceLog::query()->count());
         $this->assertSame('1002', BiometricAttendanceLog::query()->firstOrFail()->user_id);
 
-        $files = File::files(storage_path('app/biometric-deleted-logs'));
+        $files = File::isDirectory(storage_path('app/biometric-deleted-logs'))
+            ? File::files(storage_path('app/biometric-deleted-logs'))
+            : [];
         $deviceClear = collect($files)->first(
             fn ($file) => str_contains($file->getFilename(), '_device_cleared_'),
         );
-        $this->assertNotNull($deviceClear);
-
-        $payload = json_decode((string) File::get($deviceClear->getPathname()), true);
-        $this->assertSame('deleted_attendance', $payload['kind']);
-        $this->assertSame('device_retention_clear', $payload['reason']);
-        $this->assertSame(2, $payload['logs_count']);
-        $this->assertSame(1, $payload['expired_count']);
-        $userIds = collect($payload['logs'])->pluck('user_id')->all();
-        $this->assertEqualsCanonicalizing(['1001', '1002'], $userIds);
+        $this->assertNull($deviceClear);
 
         Carbon::setTestNow();
         File::deleteDirectory(storage_path('app/biometric-deleted-logs'));

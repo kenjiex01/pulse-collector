@@ -48,7 +48,7 @@ class DtrExportServiceTest extends TestCase
         ], $pairs);
     }
 
-    public function test_write_csv_outputs_employee_blocks_for_selected_users(): void
+    public function test_timesheet_includes_letterhead_and_employee_name(): void
     {
         $device = $this->makeDevice();
         BiometricDeviceUser::query()->create([
@@ -62,10 +62,7 @@ class DtrExportServiceTest extends TestCase
         $this->makeLog($device, '2026-08-05 08:00:00', 'CheckIn', '1001');
         $this->makeLog($device, '2026-08-05 17:00:00', 'CheckOut', '1001');
 
-        $handle = fopen('php://temp', 'r+');
-
-        app(DtrExportService::class)->writeCsv(
-            $handle,
+        $workbooks = app(DtrExportService::class)->buildWorkbooks(
             Carbon::parse('2026-08-05'),
             Carbon::parse('2026-08-05'),
             [[
@@ -74,14 +71,14 @@ class DtrExportServiceTest extends TestCase
             ]],
         );
 
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
+        $sheet = $workbooks[0]['spreadsheet']->getActiveSheet();
 
-        $this->assertStringContainsString('Employee: Test User (1001)', $csv);
-        $this->assertStringContainsString('2026-08-05', $csv);
-        $this->assertStringContainsString('08:00:00', $csv);
-        $this->assertStringContainsString('17:00:00', $csv);
+        $this->assertSame('2026-08-05_to_2026-08-05_Test_User', $workbooks[0]['filename']);
+        $this->assertSame('ICCT COLLEGES FOUNDATION INC.', $sheet->getCell('A1')->getValue());
+        $this->assertSame('Employee: Test User (1001)', $sheet->getCell('A8')->getValue());
+        $this->assertSame('08/05/2026', $sheet->getCell('A10')->getValue());
+        $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());
+        $this->assertSame('5:00 pm', $sheet->getCell('C10')->getValue());
     }
 
     private function makeDevice(): BiometricDevice

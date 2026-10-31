@@ -57,7 +57,7 @@
 
     <div class="card">
         <h2>Log retention</h2>
-        <p class="muted">Keep punches from the last N months (from today). Default is <strong>2 months</strong>. Save only stores the setting. On each collect, older punches are saved as JSON and removed from this PC. The time clock itself is cleared only at the <strong>end of the month</strong> (or on the next collect if that day was missed), and only when it still has a punch older than the cutoff. Pulse writes a JSON backup first and checks that those old punches are in the file. ZKTeco can only clear the whole attendance log, so newer punches on the clock are included in that same backup and stay in Pulse. Users and fingerprints are not removed. If the backup cannot be saved, the clock is not cleared.</p>
+        <p class="muted">Keep punches from the last N months (from today). Default is <strong>2 months</strong>. Save only stores the setting. On each collect, older punches are saved as JSON and removed from this PC only. Punches stay on the time clock. Users and fingerprints are not removed.</p>
         <form method="post" action="{{ route('settings.log-retention') }}">
             @csrf
             <label for="log_retention_months">Months to keep</label>
@@ -82,7 +82,7 @@
         <p class="muted" style="margin-top: 0.75rem;">
             @if ($logRetentionMonths)
                 Punches before <strong>{{ now()->subMonthsNoOverflow($logRetentionMonths)->toDateString() }}</strong>
-                are archived as JSON and removed from this PC on the next collect. They are cleared from the time clock at the end of the month, only after a JSON backup of those punches is saved and checked. Leave the field empty and save to keep all logs (collect stays blocked).
+                are archived as JSON and removed from this PC on the next collect. They stay on the time clock. Leave the field empty and save to keep all logs (collect stays blocked).
             @else
                 No retention set. Manual Collect now and automatic collection are blocked until you enter a month window.
             @endif

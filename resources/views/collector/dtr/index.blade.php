@@ -11,8 +11,9 @@
     <div class="card">
         <h2 style="margin-top:0;">Download DTR</h2>
         <p class="muted">
-            Pick a punch date range and select one or more enrolled users. The export is a CSV timesheet
-            (<code>Employee: Name (user id)</code> blocks with Date / In / Out columns) compatible with Cainta-style DTR uploads.
+            Pick a punch date range and select enrolled users. Each download is an Excel time sheet
+            with the ICCT header, In 1 through Out 6, and the hours columns.
+            The file name is the selected date range plus the employee name. Several employees download as a zip of those files.
         </p>
 
         <form method="post" action="{{ route('dtr.download') }}" id="dtr-download-form" data-file-download style="margin-top:1rem;">
@@ -128,7 +129,7 @@
             </div>
 
             <div style="display:flex; flex-wrap:wrap; gap:0.5rem;">
-                <button type="submit" class="btn" @disabled($users->isEmpty())>Download DTR (CSV)</button>
+                <button type="submit" class="btn" @disabled($users->isEmpty())>Download DTR (Excel)</button>
                 <a href="{{ route('logs.index') }}" class="btn secondary">View collected logs</a>
             </div>
         </form>

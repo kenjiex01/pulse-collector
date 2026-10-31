@@ -39,6 +39,43 @@ class DeletedLogArchiveTest extends TestCase
         $response->assertOk();
         $response->assertSee('_deleted_');
         $response->assertSee('Download');
+        $response->assertSee('Backup logs');
+        $response->assertSee('Collector logs now');
+        $response->assertSee('View backup logs');
+        $response->assertSee('View collector logs');
+        $response->assertSee('Restore into collector');
+    }
+
+    public function test_backup_logs_page_lists_punches_inside_the_json_file(): void
+    {
+        [$device] = $this->makeDevice();
+        $this->makeLog($device, '2026-01-01 08:00:00', '1001');
+        CollectorInstallation::current()->update(['log_retention_months' => 1]);
+
+        $summary = app(BiometricLogRetentionService::class)->pruneExpiredLogs();
+        $filename = $summary['files'][0];
+
+        $this->get(route('archives.backup-logs', ['filename' => $filename]))
+            ->assertOk()
+            ->assertSee('1001')
+            ->assertSee('2026-01-01 08:00:00');
+    }
+
+    public function test_restore_puts_backup_punches_back_into_the_collector(): void
+    {
+        [$device] = $this->makeDevice();
+        $this->makeLog($device, '2026-01-01 08:00:00', '1001');
+        CollectorInstallation::current()->update(['log_retention_months' => 1]);
+
+        $summary = app(BiometricLogRetentionService::class)->pruneExpiredLogs();
+        $filename = $summary['files'][0];
+        $this->assertSame(0, BiometricAttendanceLog::query()->count());
+
+        $this->post(route('archives.restore', ['filename' => $filename]))
+            ->assertRedirect(route('archives.index'))
+            ->assertSessionHas('success');
+
+        $this->assertSame(1, BiometricAttendanceLog::query()->count());
     }
 
     public function test_archives_download_returns_json_file(): void

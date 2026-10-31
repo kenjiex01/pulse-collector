@@ -24,6 +24,12 @@ class BiometricDeletedLogArchiveService
      *     logs_count: int|null,
      *     archived_at: string|null,
      *     collector_name: string|null,
+     *     device_name: string|null,
+     *     device_ip: string|null,
+     *     punched_from: string|null,
+     *     punched_to: string|null,
+     *     collector_logs_count: int,
+     *     collector_device_id: int|null,
      * }>
      */
     public function listArchives(): array
@@ -52,6 +58,12 @@ class BiometricDeletedLogArchiveService
                 'logs_count' => $meta['logs_count'],
                 'archived_at' => $meta['archived_at'],
                 'collector_name' => $meta['collector_name'],
+                'device_name' => $meta['device_name'],
+                'device_ip' => $meta['device_ip'],
+                'punched_from' => $meta['punched_from'],
+                'punched_to' => $meta['punched_to'],
+                'collector_logs_count' => $meta['collector_logs_count'],
+                'collector_device_id' => $meta['collector_device_id'],
             ];
         }
 
@@ -164,6 +176,42 @@ class BiometricDeletedLogArchiveService
         ];
     }
 
+    /**
+     * @return array{payload: array<string, mixed>, logs: list<array<string, mixed>>}
+     */
+    public function backupLogs(string $filename): array
+    {
+        $payload = $this->readPayload($this->resolveArchivePath($filename));
+
+        if (($payload['kind'] ?? null) !== 'deleted_attendance') {
+            throw new RuntimeException('Only deleted attendance backup JSON files can be opened.');
+        }
+
+        $logs = $payload['logs'] ?? [];
+
+        if (! is_array($logs)) {
+            $logs = [];
+        }
+
+        return [
+            'payload' => $payload,
+            'logs' => array_values(array_filter($logs, 'is_array')),
+        ];
+    }
+
+    /**
+     * Put a deleted-log backup back into this collector database.
+     * ZKTeco devices can only be read or fully cleared; they cannot accept uploaded punches.
+     *
+     * @return array{inserted: int, skipped_duplicates: int, skipped_unmatched: int}
+     */
+    public function restoreIntoCollector(string $filename): array
+    {
+        $payload = $this->readPayload($this->resolveArchivePath($filename));
+
+        return $this->importPayload($payload);
+    }
+
     public function resolveArchivePath(string $filename): string
     {
         $filename = $this->sanitizeFilename($filename);
@@ -194,33 +242,106 @@ class BiometricDeletedLogArchiveService
     }
 
     /**
-     * @return array{logs_count: int|null, archived_at: string|null, collector_name: string|null}
+     * @return array{
+     *     logs_count: int|null,
+     *     archived_at: string|null,
+     *     collector_name: string|null,
+     *     device_name: string|null,
+     *     device_ip: string|null,
+     *     punched_from: string|null,
+     *     punched_to: string|null,
+     *     collector_logs_count: int,
+     *     collector_device_id: int|null,
+     * }
      */
     private function readArchiveMeta(string $path): array
     {
+        $empty = [
+            'logs_count' => null,
+            'archived_at' => null,
+            'collector_name' => null,
+            'device_name' => null,
+            'device_ip' => null,
+            'punched_from' => null,
+            'punched_to' => null,
+            'collector_logs_count' => 0,
+            'collector_device_id' => null,
+        ];
+
         try {
-            $payload = json_decode((string) File::get($path), true);
+            $payload = $this->readPayload($path);
         } catch (\Throwable) {
-            return [
-                'logs_count' => null,
-                'archived_at' => null,
-                'collector_name' => null,
-            ];
+            return $empty;
         }
 
-        if (! is_array($payload)) {
-            return [
-                'logs_count' => null,
-                'archived_at' => null,
-                'collector_name' => null,
-            ];
+        $logs = is_array($payload['logs'] ?? null) ? $payload['logs'] : [];
+        $punched = [];
+        $deviceName = null;
+        $deviceIp = null;
+        $sample = null;
+
+        foreach ($logs as $log) {
+            if (! is_array($log)) {
+                continue;
+            }
+
+            $sample ??= $log;
+            $stamp = trim((string) ($log['punched_at'] ?? ''));
+
+            if ($stamp !== '') {
+                $punched[] = $stamp;
+            }
+
+            if ($deviceName === null && filled($log['device_name'] ?? null)) {
+                $deviceName = (string) $log['device_name'];
+            }
+
+            if ($deviceIp === null && filled($log['device_ip'] ?? null)) {
+                $deviceIp = (string) $log['device_ip'];
+            }
         }
+
+        sort($punched);
+        $device = is_array($sample) ? $this->resolveDevice($sample) : null;
 
         return [
-            'logs_count' => isset($payload['logs_count']) ? (int) $payload['logs_count'] : null,
+            'logs_count' => isset($payload['logs_count']) ? (int) $payload['logs_count'] : count($logs),
             'archived_at' => is_string($payload['archived_at'] ?? null) ? $payload['archived_at'] : null,
             'collector_name' => is_string($payload['collector_name'] ?? null) ? $payload['collector_name'] : null,
+            'device_name' => $deviceName,
+            'device_ip' => $deviceIp,
+            'punched_from' => $punched[0] ?? null,
+            'punched_to' => $punched === [] ? null : $punched[array_key_last($punched)],
+            'collector_logs_count' => $this->collectorLogsInRange($device, $punched[0] ?? null, $punched === [] ? null : $punched[array_key_last($punched)]),
+            'collector_device_id' => $device?->id,
         ];
+    }
+
+    private function collectorLogsInRange(?BiometricDevice $device, ?string $from, ?string $to): int
+    {
+        if ($device === null || $from === null || $to === null) {
+            return 0;
+        }
+
+        return BiometricAttendanceLog::query()
+            ->where('biometric_device_id', $device->id)
+            ->where('punched_at', '>=', $from)
+            ->where('punched_at', '<=', $to)
+            ->count();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readPayload(string $path): array
+    {
+        $payload = json_decode((string) File::get($path), true);
+
+        if (! is_array($payload)) {
+            throw new RuntimeException('The backup file is not valid JSON.');
+        }
+
+        return $payload;
     }
 
     /**
