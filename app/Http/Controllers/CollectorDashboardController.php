@@ -45,6 +45,7 @@ class CollectorDashboardController extends Controller
             'statusPollSeconds' => (int) config('biometric.device.status_poll_seconds', 10),
             'collectorName' => app(CollectorInstallationService::class)->displayName(),
             'collectorSlug' => app(CollectorInstallationService::class)->slug(),
+            'dtrLetterhead' => app(CollectorInstallationService::class)->dtrLetterhead(),
             'attendanceStartDate' => app(CollectorInstallationService::class)
                 ->attendanceStartDate()?->toDateString(),
             'logRetentionMonths' => app(CollectorInstallationService::class)->logRetentionMonths(),
@@ -65,6 +66,27 @@ class CollectorDashboardController extends Controller
         return redirect()
             ->route('dashboard')
             ->with('success', 'Collector name saved. Future S3 uploads will use this label.');
+    }
+
+    public function updateDtrLetterhead(Request $request, CollectorInstallationService $installation): RedirectResponse
+    {
+        $validated = $request->validate([
+            'dtr_address' => ['nullable', 'string', 'max:255'],
+            'dtr_contact_number' => ['nullable', 'string', 'max:80'],
+            'dtr_email' => ['nullable', 'email', 'max:255'],
+            'dtr_website' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $installation->updateDtrLetterhead([
+            'address' => $validated['dtr_address'] ?? null,
+            'contact_number' => $validated['dtr_contact_number'] ?? null,
+            'email' => $validated['dtr_email'] ?? null,
+            'website' => $validated['dtr_website'] ?? null,
+        ]);
+
+        return redirect()
+            ->route('dashboard')
+            ->with('success', 'DTR letterhead saved. Download DTR will use this address and contact line.');
     }
 
     public function updateAttendanceStartDate(

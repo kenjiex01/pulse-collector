@@ -23,6 +23,7 @@ Route::post('/desktop/updater/check', [DesktopUpdaterController::class, 'check']
 Route::post('/desktop/updater/install', [DesktopUpdaterController::class, 'install'])
     ->name('desktop.updater.install');
 Route::post('/settings/collector-name', [CollectorDashboardController::class, 'updateCollectorName'])->name('settings.collector-name');
+Route::post('/settings/dtr-letterhead', [CollectorDashboardController::class, 'updateDtrLetterhead'])->name('settings.dtr-letterhead');
 Route::post('/settings/attendance-start-date', [CollectorDashboardController::class, 'updateAttendanceStartDate'])
     ->name('settings.attendance-start-date');
 Route::post('/settings/log-retention', [CollectorDashboardController::class, 'updateLogRetention'])

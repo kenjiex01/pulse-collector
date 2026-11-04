@@ -6,6 +6,7 @@ use App\Models\BiometricAttendanceLog;
 use App\Models\BiometricDevice;
 use App\Models\BiometricDeviceUser;
 use App\Models\Campus;
+use App\Services\CollectorInstallationService;
 use App\Services\DtrExportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -23,6 +24,9 @@ class DtrDownloadTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Download DTR');
+        $response->assertSee('Reminder:');
+        $response->assertSee('Address, Contact number, Email address, Website');
+        $response->assertSee('You can still download.');
         $response->assertSee('data-file-download', false);
         $response->assertSee((string) $device->id.':1001');
     }
@@ -66,6 +70,8 @@ class DtrDownloadTest extends TestCase
         @unlink($path);
 
         $this->assertSame('ICCT COLLEGES FOUNDATION INC.', $sheet->getCell('A1')->getValue());
+        $this->assertNull($sheet->getCell('A2')->getValue());
+        $this->assertNull($sheet->getCell('A3')->getValue());
         $this->assertSame('TIME SHEET REPORT', $sheet->getCell('A5')->getValue());
         $this->assertSame('Employee: Ana Reyes (1001)', $sheet->getCell('A8')->getValue());
         $this->assertSame('In 1', $sheet->getCell('B9')->getValue());
@@ -73,6 +79,58 @@ class DtrDownloadTest extends TestCase
         $this->assertSame('Hrs Worked', $sheet->getCell('P9')->getValue());
         $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());
         $this->assertSame('5:00 pm', $sheet->getCell('C10')->getValue());
+    }
+
+    public function test_saved_letterhead_is_printed_on_the_dtr(): void
+    {
+        [$device] = $this->makeDeviceWithUser();
+        BiometricAttendanceLog::query()->create([
+            'campus_id' => $device->campus_id,
+            'biometric_device_id' => $device->id,
+            'device_uid' => 1,
+            'user_id' => '1001',
+            'user_name' => 'Ana Reyes',
+            'punched_at' => '2026-08-10 08:00:00',
+            'verify_mode' => 'Fingerprint',
+            'punch_state' => 'CheckIn',
+        ]);
+
+        $this->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('DTR letterhead')
+            ->assertSee('name="dtr_address"', false)
+            ->assertSee('name="dtr_contact_number"', false)
+            ->assertSee('name="dtr_email"', false)
+            ->assertSee('name="dtr_website"', false);
+
+        $this->post(route('settings.dtr-letterhead'), [
+            'dtr_address' => 'ICCT Bldg., Cabrera Rd. Cor. Manila East Rd, Brgy. San Isidro, Taytay, Rizal',
+            'dtr_contact_number' => '8-425-28-42 / 7-938-42-25',
+            'dtr_email' => 'cainta@icct.edu.ph',
+            'dtr_website' => 'www.icct.edu.ph',
+        ])->assertRedirect(route('dashboard'));
+
+        $letterhead = app(CollectorInstallationService::class)->dtrLetterhead();
+        $this->assertSame('cainta@icct.edu.ph', $letterhead['email']);
+
+        $this->get(route('dtr.index'))
+            ->assertOk()
+            ->assertDontSee('Reminder:');
+
+        $response = $this->post(route('dtr.download'), [
+            'date_from' => '2026-08-10',
+            'date_to' => '2026-08-10',
+            'users' => [DtrExportService::userKey($device->id, '1001')],
+        ]);
+
+        $response->assertOk();
+        $path = tempnam(sys_get_temp_dir(), 'dtr-test-');
+        file_put_contents($path, $response->streamedContent());
+        $sheet = IOFactory::load($path)->getActiveSheet();
+        @unlink($path);
+
+        $this->assertSame('ICCT Bldg., Cabrera Rd. Cor. Manila East Rd, Brgy. San Isidro, Taytay, Rizal', $sheet->getCell('A2')->getValue());
+        $this->assertSame('Telephone: 8-425-28-42 / 7-938-42-25, Website: www.icct.edu.ph, Email: cainta@icct.edu.ph', $sheet->getCell('A3')->getValue());
     }
 
     public function test_dtr_download_requires_at_least_one_user(): void

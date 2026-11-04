@@ -16,6 +16,15 @@
             The file name is the selected date range plus the employee name. Several employees download as a zip of those files.
         </p>
 
+        @if ($blankLetterheadLabels !== [])
+            <p class="errors" style="margin-top:0.75rem;">
+                Reminder: {{ implode(', ', $blankLetterheadLabels) }}
+                {{ count($blankLetterheadLabels) === 1 ? 'is' : 'are' }} blank on
+                <a href="{{ route('dashboard') }}">DTR letterhead</a>.
+                You can still download. Those fields will be blank on the sheet.
+            </p>
+        @endif
+
         <form method="post" action="{{ route('dtr.download') }}" id="dtr-download-form" data-file-download style="margin-top:1rem;">
             @csrf
 

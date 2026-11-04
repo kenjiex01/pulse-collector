@@ -8,6 +8,7 @@ use App\Console\Commands\RunBiometricAutoCollectCommand;
 use App\Listeners\HandleDesktopUpdaterEvents;
 use App\Listeners\RestartBiometricAutoCollectWorker;
 use App\Listeners\StartBiometricScheduleWorker;
+use App\Services\CollectorInstallationService;
 use App\Services\DesktopUpdaterService;
 use App\Support\EncryptedEnv;
 use Illuminate\Database\Events\ConnectionEstablished;
@@ -144,6 +145,7 @@ class AppServiceProvider extends ServiceProvider
         try {
             Artisan::call('migrate', ['--force' => true]);
             $this->ensureLogRetentionColumn();
+            app(CollectorInstallationService::class)->ensureDtrLetterheadColumns();
 
             if ($isFirstLaunch || ! \App\Models\Campus::query()->exists()) {
                 Artisan::call('db:seed', ['--force' => true]);

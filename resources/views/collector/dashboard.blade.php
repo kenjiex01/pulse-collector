@@ -29,6 +29,67 @@
     </div>
 
     <div class="card">
+        <h2>DTR letterhead</h2>
+        <p class="muted">Printed under the school name when you download a DTR. A blank field stays blank on the sheet. Download DTR still works, and that page reminds you which fields are blank.</p>
+        <form method="post" action="{{ route('settings.dtr-letterhead') }}">
+            @csrf
+            <label for="dtr_address">Address</label>
+            <input
+                type="text"
+                id="dtr_address"
+                name="dtr_address"
+                class="field"
+                value="{{ old('dtr_address', $dtrLetterhead['address']) }}"
+                maxlength="255"
+            >
+            @error('dtr_address')
+                <p class="errors">{{ $message }}</p>
+            @enderror
+
+            <label for="dtr_contact_number">Contact number</label>
+            <input
+                type="text"
+                id="dtr_contact_number"
+                name="dtr_contact_number"
+                class="field"
+                value="{{ old('dtr_contact_number', $dtrLetterhead['contact_number']) }}"
+                maxlength="80"
+            >
+            @error('dtr_contact_number')
+                <p class="errors">{{ $message }}</p>
+            @enderror
+
+            <label for="dtr_email">Email address</label>
+            <input
+                type="email"
+                id="dtr_email"
+                name="dtr_email"
+                class="field"
+                value="{{ old('dtr_email', $dtrLetterhead['email']) }}"
+                maxlength="255"
+            >
+            @error('dtr_email')
+                <p class="errors">{{ $message }}</p>
+            @enderror
+
+            <label for="dtr_website">Website</label>
+            <input
+                type="text"
+                id="dtr_website"
+                name="dtr_website"
+                class="field"
+                value="{{ old('dtr_website', $dtrLetterhead['website']) }}"
+                maxlength="255"
+            >
+            @error('dtr_website')
+                <p class="errors">{{ $message }}</p>
+            @enderror
+
+            <button type="submit" class="secondary" style="margin-top: 0.75rem;">Save letterhead</button>
+        </form>
+    </div>
+
+    <div class="card">
         <h2>Attendance retrieval window</h2>
         <p class="muted">Use a start date to skip old punches from the device during new collections.</p>
         <form method="post" action="{{ route('settings.attendance-start-date') }}">

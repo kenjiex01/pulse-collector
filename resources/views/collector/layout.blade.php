@@ -118,7 +118,7 @@
         button.secondary:hover { background: #334155; }
         button.danger { background: #dc2626; font-size: 0.8rem; padding: 0.35rem 0.65rem; }
         label { display: block; font-weight: 600; margin-bottom: 0.35rem; font-size: 0.875rem; }
-        input[type="text"], input[type="search"], input[type="number"], input[type="date"], select { width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; box-sizing: border-box; background: #fff; }
+        input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], select { width: 100%; padding: 0.5rem 0.65rem; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; box-sizing: border-box; background: #fff; }
         input[type="date"] { min-height: 2.5rem; color: #0f172a; }
         input[type="search"] { -webkit-appearance: none; appearance: none; }
         .logs-filter-form { display: block; }

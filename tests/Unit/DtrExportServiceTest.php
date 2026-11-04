@@ -75,6 +75,8 @@ class DtrExportServiceTest extends TestCase
 
         $this->assertSame('2026-08-05_to_2026-08-05_Test_User', $workbooks[0]['filename']);
         $this->assertSame('ICCT COLLEGES FOUNDATION INC.', $sheet->getCell('A1')->getValue());
+        $this->assertSame('', $sheet->getCell('A2')->getValue());
+        $this->assertSame('', $sheet->getCell('A3')->getValue());
         $this->assertSame('Employee: Test User (1001)', $sheet->getCell('A8')->getValue());
         $this->assertSame('08/05/2026', $sheet->getCell('A10')->getValue());
         $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());

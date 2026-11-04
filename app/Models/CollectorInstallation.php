@@ -10,6 +10,10 @@ class CollectorInstallation extends Model
         'name',
         'attendance_start_date',
         'log_retention_months',
+        'dtr_address',
+        'dtr_contact_number',
+        'dtr_email',
+        'dtr_website',
     ];
 
     protected function casts(): array

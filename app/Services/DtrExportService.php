@@ -23,10 +23,6 @@ class DtrExportService
 
     private const COMPANY_NAME = 'ICCT COLLEGES FOUNDATION INC.';
 
-    private const COMPANY_ADDRESS = 'ICCT Bldg., Cabrera Rd. Cor. Manila East Rd. Brgy. San Juan, Taytay, Rizal';
-
-    private const COMPANY_CONTACT = 'Telephone: 8.423.18.41 / 7.978.42.28, Website: www.icct.edu.ph, Email: taytay@icct.edu.ph';
-
     /** @var list<string> */
     private const IN_PUNCH_STATES = [
         'CheckIn',
@@ -167,9 +163,10 @@ class DtrExportService
         $sheet->mergeCells("A5:{$lastColumn}5");
         $sheet->mergeCells("A6:{$lastColumn}6");
 
+        $letterhead = app(CollectorInstallationService::class)->dtrLetterhead();
         $sheet->setCellValue('A1', self::COMPANY_NAME);
-        $sheet->setCellValue('A2', self::COMPANY_ADDRESS);
-        $sheet->setCellValue('A3', self::COMPANY_CONTACT);
+        $sheet->setCellValue('A2', $letterhead['address']);
+        $sheet->setCellValue('A3', app(CollectorInstallationService::class)->dtrContactLine());
         $sheet->setCellValue('A5', 'TIME SHEET REPORT');
         $sheet->setCellValue('A6', sprintf(
             'From %s to %s',

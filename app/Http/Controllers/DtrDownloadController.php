@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BiometricDevice;
 use App\Models\BiometricDeviceUser;
+use App\Services\CollectorInstallationService;
 use App\Services\DtrExportService;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -66,6 +67,7 @@ class DtrDownloadController extends Controller
             'dateFrom' => $dateFrom->format('Y-m-d'),
             'dateTo' => $dateTo->format('Y-m-d'),
             'selectedUserKeys' => $selectedUserKeys,
+            'blankLetterheadLabels' => app(CollectorInstallationService::class)->blankDtrLetterheadLabels(),
         ]);
     }
 

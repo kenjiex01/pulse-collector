@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 class CollectorInstallationService
 {
+
     public function displayName(): ?string
     {
         $fromDb = CollectorInstallation::current()->name;
@@ -101,6 +102,117 @@ class CollectorInstallationService
         $installation->save();
 
         return $installation;
+    }
+
+    /**
+     * @return array{address: string, contact_number: string, email: string, website: string}
+     */
+    public function dtrLetterhead(): array
+    {
+        $this->ensureDtrLetterheadColumns();
+
+        $installation = CollectorInstallation::current();
+
+        return [
+            'address' => $this->letterheadValue($installation->dtr_address),
+            'contact_number' => $this->letterheadValue($installation->dtr_contact_number),
+            'email' => $this->letterheadValue($installation->dtr_email),
+            'website' => $this->letterheadValue($installation->dtr_website),
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function blankDtrLetterheadLabels(): array
+    {
+        $letterhead = $this->dtrLetterhead();
+        $labels = [
+            'address' => 'Address',
+            'contact_number' => 'Contact number',
+            'email' => 'Email address',
+            'website' => 'Website',
+        ];
+        $blank = [];
+
+        foreach ($labels as $key => $label) {
+            if ($letterhead[$key] === '') {
+                $blank[] = $label;
+            }
+        }
+
+        return $blank;
+    }
+
+    public function dtrContactLine(): string
+    {
+        $letterhead = $this->dtrLetterhead();
+        $parts = [];
+
+        if ($letterhead['contact_number'] !== '') {
+            $parts[] = 'Telephone: '.$letterhead['contact_number'];
+        }
+
+        if ($letterhead['website'] !== '') {
+            $parts[] = 'Website: '.$letterhead['website'];
+        }
+
+        if ($letterhead['email'] !== '') {
+            $parts[] = 'Email: '.$letterhead['email'];
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
+     * @param  array{address?: string|null, contact_number?: string|null, email?: string|null, website?: string|null}  $values
+     */
+    public function updateDtrLetterhead(array $values): CollectorInstallation
+    {
+        $this->ensureDtrLetterheadColumns();
+
+        $installation = CollectorInstallation::current();
+        $installation->fill([
+            'dtr_address' => $this->storedLetterhead($values['address'] ?? null),
+            'dtr_contact_number' => $this->storedLetterhead($values['contact_number'] ?? null),
+            'dtr_email' => $this->storedLetterhead($values['email'] ?? null),
+            'dtr_website' => $this->storedLetterhead($values['website'] ?? null),
+        ]);
+        $installation->save();
+
+        return $installation;
+    }
+
+    public function ensureDtrLetterheadColumns(): void
+    {
+        if (! Schema::hasTable('collector_installations')) {
+            return;
+        }
+
+        $missing = array_filter(
+            ['dtr_address', 'dtr_contact_number', 'dtr_email', 'dtr_website'],
+            fn (string $column): bool => ! Schema::hasColumn('collector_installations', $column),
+        );
+
+        if ($missing === []) {
+            return;
+        }
+
+        Schema::table('collector_installations', function (Blueprint $table) use ($missing): void {
+            foreach ($missing as $column) {
+                $table->string($column)->nullable();
+            }
+        });
+    }
+
+    private function letterheadValue(mixed $stored): string
+    {
+        return trim((string) $stored);
+    }
+
+    private function storedLetterhead(mixed $value): string
+    {
+        return trim((string) $value);
     }
 
     public function ensureLogRetentionColumn(): void
