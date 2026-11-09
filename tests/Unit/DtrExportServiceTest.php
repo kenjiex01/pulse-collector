@@ -79,8 +79,10 @@ class DtrExportServiceTest extends TestCase
         $this->assertSame('', $sheet->getCell('A3')->getValue());
         $this->assertSame('Employee: Test User (1001)', $sheet->getCell('A8')->getValue());
         $this->assertSame('08/05/2026', $sheet->getCell('A10')->getValue());
-        $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());
-        $this->assertSame('5:00 pm', $sheet->getCell('C10')->getValue());
+        $this->assertSame('Day', $sheet->getCell('B9')->getValue());
+        $this->assertSame('Wednesday', $sheet->getCell('B10')->getValue());
+        $this->assertSame('8:00 am', $sheet->getCell('C10')->getValue());
+        $this->assertSame('5:00 pm', $sheet->getCell('D10')->getValue());
     }
 
     private function makeDevice(): BiometricDevice

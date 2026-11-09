@@ -156,7 +156,7 @@ class DtrExportService
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle(Str::limit($employeeName, 31, ''));
 
-        $lastColumn = 'R';
+        $lastColumn = 'S';
         $sheet->mergeCells("A1:{$lastColumn}1");
         $sheet->mergeCells("A2:{$lastColumn}2");
         $sheet->mergeCells("A3:{$lastColumn}3");
@@ -175,7 +175,7 @@ class DtrExportService
         ));
         $sheet->setCellValue('A8', 'Employee: '.$employeeName.' ('.$userId.')');
 
-        $headers = ['Date'];
+        $headers = ['Date', 'Day'];
         for ($pair = 1; $pair <= self::MAX_IN_OUT_PAIRS; $pair++) {
             $headers[] = 'In '.$pair;
             $headers[] = 'Out '.$pair;
@@ -207,7 +207,7 @@ class DtrExportService
             }
 
             $totalWorked += $worked;
-            $values = [$date->format('m/d/Y')];
+            $values = [$date->format('m/d/Y'), $date->englishDayOfWeek];
 
             for ($pairIndex = 0; $pairIndex < self::MAX_IN_OUT_PAIRS; $pairIndex++) {
                 $pair = $pairs[$pairIndex] ?? ['in' => '', 'out' => ''];
@@ -226,15 +226,15 @@ class DtrExportService
 
         $totalRow = $row;
         $sheet->setCellValue("A{$totalRow}", 'Total:');
-        $sheet->setCellValue("N{$totalRow}", '0.00');
         $sheet->setCellValue("O{$totalRow}", '0.00');
-        $sheet->setCellValue("P{$totalRow}", number_format($totalWorked, 2, '.', ''));
-        $sheet->setCellValue("Q{$totalRow}", '0.00');
+        $sheet->setCellValue("P{$totalRow}", '0.00');
+        $sheet->setCellValue("Q{$totalRow}", number_format($totalWorked, 2, '.', ''));
         $sheet->setCellValue("R{$totalRow}", '0.00');
+        $sheet->setCellValue("S{$totalRow}", '0.00');
 
         $summaryRow = $totalRow + 2;
         $sheet->setCellValue("A{$summaryRow}", 'Days Present: '.$daysPresent);
-        $sheet->setCellValue("D{$summaryRow}", 'Days Absent: '.$daysAbsent);
+        $sheet->setCellValue("E{$summaryRow}", 'Days Absent: '.$daysAbsent);
 
         $footer = $summaryRow + 2;
         $workingDays = $daysPresent + $daysAbsent;

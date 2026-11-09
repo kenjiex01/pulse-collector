@@ -74,11 +74,13 @@ class DtrDownloadTest extends TestCase
         $this->assertNull($sheet->getCell('A3')->getValue());
         $this->assertSame('TIME SHEET REPORT', $sheet->getCell('A5')->getValue());
         $this->assertSame('Employee: Ana Reyes (1001)', $sheet->getCell('A8')->getValue());
-        $this->assertSame('In 1', $sheet->getCell('B9')->getValue());
-        $this->assertSame('Out 6', $sheet->getCell('M9')->getValue());
-        $this->assertSame('Hrs Worked', $sheet->getCell('P9')->getValue());
-        $this->assertSame('8:00 am', $sheet->getCell('B10')->getValue());
-        $this->assertSame('5:00 pm', $sheet->getCell('C10')->getValue());
+        $this->assertSame('Day', $sheet->getCell('B9')->getValue());
+        $this->assertSame('In 1', $sheet->getCell('C9')->getValue());
+        $this->assertSame('Out 6', $sheet->getCell('N9')->getValue());
+        $this->assertSame('Hrs Worked', $sheet->getCell('Q9')->getValue());
+        $this->assertSame('Monday', $sheet->getCell('B10')->getValue());
+        $this->assertSame('8:00 am', $sheet->getCell('C10')->getValue());
+        $this->assertSame('5:00 pm', $sheet->getCell('D10')->getValue());
     }
 
     public function test_saved_letterhead_is_printed_on_the_dtr(): void
