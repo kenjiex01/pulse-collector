@@ -52,17 +52,21 @@
                 @endif
             </div>
         </form>
-        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin: 0.75rem 0 0;">
-            <a href="{{ route('users.department-template') }}" class="btn secondary">Download template</a>
-            <form method="post" action="{{ route('users.department-upload') }}" enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin:0;">
+        <div class="department-file-actions">
+            <div class="department-file-action">
+                <a href="{{ route('users.department-template') }}" class="btn secondary" data-file-download>Download template</a>
+                <p class="muted">The file lists each User ID and name. Fill only the Department column.</p>
+            </div>
+            <form method="post" action="{{ route('users.department-upload') }}" enctype="multipart/form-data" class="department-upload-box">
                 @csrf
-                <input type="file" name="file" accept=".xlsx,.xls" required aria-label="Department upload file">
-                <button type="submit" class="secondary">Upload department</button>
+                <label for="department-upload-file">Upload department</label>
+                <p class="muted">Choose the filled template, then click Upload department.</p>
+                <div class="department-upload-row">
+                    <input id="department-upload-file" type="file" name="file" accept=".xlsx,.xls" required>
+                    <button type="submit" class="secondary">Upload department</button>
+                </div>
             </form>
         </div>
-        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">
-            The template lists each User ID and name. Fill only the Department column with a department that already exists, then upload the file.
-        </p>
         @error('file')<p class="errors">{{ $message }}</p>@enderror
         @if ($selectedDevice)
             <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin: 0.75rem 0 0;">

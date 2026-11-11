@@ -241,6 +241,9 @@ class DeviceUserDepartmentUploadTest extends TestCase
         $users->assertOk();
         $users->assertSee('Ana Reyes');
         $users->assertDontSee('Ben Cruz');
+        $users->assertSee('data-file-download', false);
+        $users->assertSee('for="department-upload-file"', false);
+        $users->assertSee('department-upload-box', false);
 
         $dtr = $this->get(route('dtr.index', ['department_id' => $hr->id]));
         $dtr->assertOk();

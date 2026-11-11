@@ -9,8 +9,8 @@
     </p>
 
     <div class="card">
-        <div class="data-table-header">
-            <h2 style="margin:0;">Departments</h2>
+        <div class="heading-with-action">
+            <h2>Departments</h2>
             <a href="{{ route('departments.create') }}" class="btn">Add department</a>
         </div>
         <p class="muted" style="margin: 0.75rem 0 0;">

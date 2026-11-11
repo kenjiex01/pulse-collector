@@ -143,6 +143,16 @@
         .logs-filter-search-row .field-search label { font-size: 0.875rem; }
         .logs-filter-search-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; flex: 0 0 auto; padding-bottom: 0.1rem; }
         .data-table-toolbar .field-device { flex: 0 1 16rem; min-width: 12rem; max-width: 18rem; }
+        .heading-with-action { display: flex; flex-wrap: wrap; align-items: center; gap: 1.25rem 1.5rem; }
+        .heading-with-action h2 { margin: 0; }
+        .department-file-actions { display: flex; flex-wrap: wrap; gap: 1rem; align-items: stretch; margin-top: 1rem; }
+        .department-file-action,
+        .department-upload-box { flex: 1 1 18rem; margin: 0; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; padding: 0.9rem 1rem; }
+        .department-file-action p,
+        .department-upload-box p { margin: 0.4rem 0 0; font-size: 0.875rem; }
+        .department-upload-box label { margin-bottom: 0.25rem; }
+        .department-upload-row { display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center; margin-top: 0.75rem; }
+        .department-upload-row input[type="file"] { flex: 1 1 12rem; min-width: 10rem; }
         .field-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: flex-end; }
         .field { flex: 1; min-width: 10rem; }
         .field-sm { max-width: 8rem; }
@@ -374,6 +384,8 @@
                     || /\/collect\/auto\/?$/.test(path)
                     || /\/collect\/now\/?$/.test(path)
                     || /\/dtr\/download\/?$/.test(path)
+                    || /\/users\/department-template\/?$/.test(path)
+                    || /\/archives\/[^/]+\/download\/?$/.test(path)
                     || /\/desktop\/updater\/status\/?$/.test(path)
                     || /\/desktop\/updater\/check\/?$/.test(path)
                     || /\/desktop\/updater\/install\/?$/.test(path)
@@ -394,8 +406,8 @@
                 }
             };
 
-            const saveDownloadBytes = (bytes, filename) => {
-                const safeName = (filename || 'download.csv').replace(/[\\/:*?"<>|]/g, '_');
+            const saveDownloadBytes = (bytes, filename, contentType) => {
+                const safeName = (filename || 'download').replace(/[\\/:*?"<>|]/g, '_');
 
                 try {
                     const fs = window.require?.('fs');
@@ -423,7 +435,7 @@
                     // Fall back to a browser download link.
                 }
 
-                const blob = new Blob([bytes], { type: 'text/csv;charset=utf-8' });
+                const blob = new Blob([bytes], { type: contentType || 'application/octet-stream' });
                 const objectUrl = URL.createObjectURL(blob);
                 const anchor = document.createElement('a');
                 anchor.href = objectUrl;
@@ -435,16 +447,16 @@
                 window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
             };
 
-            const downloadFormAsFile = async (form) => {
+            const downloadUrlAsFile = async (url, options = {}) => {
                 show('Downloading…');
 
                 try {
-                    const response = await fetch(form.action, {
-                        method: (form.method || 'POST').toUpperCase(),
-                        body: new FormData(form),
+                    const response = await fetch(url, {
+                        method: (options.method || 'GET').toUpperCase(),
+                        body: options.body,
                         credentials: 'same-origin',
                         headers: {
-                            Accept: 'text/csv,application/octet-stream,application/json,*/*',
+                            Accept: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/zip,application/json,text/csv,application/octet-stream,*/*',
                             'X-Requested-With': 'XMLHttpRequest',
                         },
                     });
@@ -456,12 +468,13 @@
                         || (bytes.length > 0 && bytes[0] === 0x3c);
 
                     if (! response.ok || looksLikeHtml) {
-                        throw new Error('Could not download the file. Check the date range and selected users, then try again.');
+                        throw new Error(options.errorMessage || 'Could not download the file.');
                     }
 
                     const filename = filenameFromDisposition(response.headers.get('content-disposition'))
-                        || 'dtr.csv';
-                    saveDownloadBytes(bytes, filename);
+                        || options.fallbackName
+                        || 'download';
+                    saveDownloadBytes(bytes, filename, contentType.split(';')[0]);
                 } catch (error) {
                     window.alert(error?.message || 'Download failed.');
                 } finally {
@@ -469,9 +482,22 @@
                 }
             };
 
+            const downloadFormAsFile = (form) => downloadUrlAsFile(form.action, {
+                method: form.method || 'POST',
+                body: new FormData(form),
+                fallbackName: 'dtr.csv',
+                errorMessage: 'Could not download the file. Check the date range and selected users, then try again.',
+            });
+
             document.addEventListener('click', (event) => {
                 const link = event.target.closest('a[href]');
                 if (! link || link.dataset.noLoader !== undefined) {
+                    return;
+                }
+                if (link.dataset.fileDownload !== undefined) {
+                    event.preventDefault();
+                    downloadUrlAsFile(link.href);
+
                     return;
                 }
                 if (link.hasAttribute('data-desktop-installer-download')) {

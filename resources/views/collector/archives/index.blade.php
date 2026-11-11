@@ -84,7 +84,7 @@
                                 <td>{{ $archive['archived_at'] ? \App\Support\CollectorDisplayTime::format(\Carbon\Carbon::parse($archive['archived_at'])) : '—' }}</td>
                                 <td>{{ number_format($archive['size_bytes'] / 1024, 1) }} KB</td>
                                 <td>
-                                    <a href="{{ route('archives.download', ['filename' => $archive['filename']]) }}" class="btn secondary">Download</a>
+                                    <a href="{{ route('archives.download', ['filename' => $archive['filename']]) }}" class="btn secondary" data-file-download>Download</a>
                                     <form method="post" action="{{ route('archives.restore', ['filename' => $archive['filename']]) }}" data-archive-admin hidden style="margin-top:0.4rem;" onsubmit="return confirm('Put these punches back into this collector? The time clock cannot accept old punches.');">
                                         @csrf
                                         <button type="submit" class="btn">Restore into collector</button>
