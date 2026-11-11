@@ -15,6 +15,7 @@ class BiometricDeviceUser extends Model
         'name',
         'card_number',
         'privilege',
+        'department_id',
         'synced_at',
         's3_export_batch_id',
         's3_pushed_at',
@@ -38,5 +39,10 @@ class BiometricDeviceUser extends Model
     public function device(): BelongsTo
     {
         return $this->belongsTo(BiometricDevice::class, 'biometric_device_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class)->withTrashed();
     }
 }

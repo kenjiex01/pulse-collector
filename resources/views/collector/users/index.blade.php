@@ -25,6 +25,17 @@
                     @endforeach
                 </select>
             </div>
+            <div class="field field-device">
+                <label for="department_id">Department</label>
+                <select id="department_id" name="department_id" onchange="this.form.submit()">
+                    <option value="">All departments</option>
+                    @foreach ($departments as $department)
+                        <option value="{{ $department->id }}" @selected($selectedDepartmentId === $department->id)>
+                            {{ $department->name }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
             <div class="data-table-toolbar-actions">
                 <label for="search" class="toolbar-inline-label">Search</label>
                 <input
@@ -36,11 +47,23 @@
                     placeholder="User ID, name, or card"
                 >
                 <button type="submit" class="secondary">Apply</button>
-                @if ($selectedDeviceId || $search !== '')
+                @if ($selectedDeviceId || $selectedDepartmentId || $search !== '')
                     <a href="{{ route('users.index') }}" class="btn secondary">Reset</a>
                 @endif
             </div>
         </form>
+        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; align-items:flex-end; margin: 0.75rem 0 0;">
+            <a href="{{ route('users.department-template') }}" class="btn secondary">Download template</a>
+            <form method="post" action="{{ route('users.department-upload') }}" enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin:0;">
+                @csrf
+                <input type="file" name="file" accept=".xlsx,.xls" required aria-label="Department upload file">
+                <button type="submit" class="secondary">Upload department</button>
+            </form>
+        </div>
+        <p class="muted" style="margin: 0.5rem 0 0; font-size: 0.875rem;">
+            The template lists each User ID and name. Fill only the Department column with a department that already exists, then upload the file.
+        </p>
+        @error('file')<p class="errors">{{ $message }}</p>@enderror
         @if ($selectedDevice)
             <div style="display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; margin: 0.75rem 0 0;">
                 <a href="{{ route('users.create', ['device_id' => $selectedDevice->id]) }}" class="btn">Add user</a>
@@ -79,6 +102,7 @@
                             <th>#</th>
                             <th>User ID</th>
                             <th>Name</th>
+                            <th>Department</th>
                             <th>Role</th>
                             <th>Card / RFID</th>
                             <th>Device UID</th>
@@ -94,6 +118,7 @@
                                 <td class="num">{{ $users->firstItem() + $loop->index }}</td>
                                 <td><code>{{ $user->user_id }}</code></td>
                                 <td>{{ $user->name ?? '—' }}</td>
+                                <td>{{ $user->department?->name ?? '—' }}</td>
                                 <td>{{ \App\Support\ZkTecoUserPrivilege::label($user->privilege) }}</td>
                                 <td>{{ $user->card_number ?? '—' }}</td>
                                 <td>{{ $user->device_uid ?? '—' }}</td>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\BiometricDevice;
 use App\Models\BiometricDeviceUser;
+use App\Models\Department;
 use App\Services\CollectorInstallationService;
 use App\Services\DtrExportService;
 use Carbon\Carbon;
@@ -22,6 +23,7 @@ class DtrDownloadController extends Controller
     public function index(Request $request): View
     {
         $deviceId = $request->integer('device_id') ?: null;
+        $departmentId = $request->integer('department_id') ?: null;
         $search = trim((string) $request->input('search', ''));
         $dateFrom = $this->parseFilterDate($request->input('date_from'))
             ?? now()->startOfMonth();
@@ -37,8 +39,9 @@ class DtrDownloadController extends Controller
             : null;
 
         $users = BiometricDeviceUser::query()
-            ->with(['device.campus'])
+            ->with(['device.campus', 'department'])
             ->when($deviceId, fn ($query) => $query->where('biometric_device_id', $deviceId))
+            ->when($departmentId, fn ($query) => $query->where('department_id', $departmentId))
             ->when($search !== '', function ($query) use ($search): void {
                 $like = '%'.$search.'%';
                 $query->where(function ($inner) use ($like): void {
@@ -61,7 +64,9 @@ class DtrDownloadController extends Controller
         return view('collector.dtr.index', [
             'users' => $users,
             'devices' => BiometricDevice::query()->with('campus')->orderBy('name')->get(),
+            'departments' => Department::query()->orderBy('name')->get(),
             'selectedDeviceId' => $deviceId,
+            'selectedDepartmentId' => $departmentId,
             'selectedDevice' => $selectedDevice,
             'search' => $search,
             'dateFrom' => $dateFrom->format('Y-m-d'),
@@ -91,12 +96,12 @@ class DtrDownloadController extends Controller
             );
         } catch (RuntimeException $exception) {
             return redirect()
-                ->route('dtr.index', $request->only(['device_id', 'search']))
+                ->route('dtr.index', $request->only(['device_id', 'department_id', 'search']))
                 ->withInput()
                 ->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
             return redirect()
-                ->route('dtr.index', $request->only(['device_id', 'search']))
+                ->route('dtr.index', $request->only(['device_id', 'department_id', 'search']))
                 ->withInput()
                 ->with('error', 'Could not generate DTR export: '.$exception->getMessage());
         }

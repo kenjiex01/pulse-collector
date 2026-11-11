@@ -57,6 +57,17 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="field field-device">
+                    <label for="department_id">Department</label>
+                    <select id="department_id" name="department_id" form="dtr-user-filter-form" onchange="document.getElementById('dtr-user-filter-form').requestSubmit()">
+                        <option value="">All departments</option>
+                        @foreach ($departments as $department)
+                            <option value="{{ $department->id }}" @selected($selectedDepartmentId === $department->id)>
+                                {{ $department->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="data-table-toolbar-actions">
                     <label for="search" class="toolbar-inline-label">Search</label>
                     <input
@@ -69,7 +80,7 @@
                         form="dtr-user-filter-form"
                     >
                     <button type="submit" class="secondary" form="dtr-user-filter-form">Apply filter</button>
-                    @if ($selectedDeviceId || $search !== '')
+                    @if ($selectedDeviceId || $selectedDepartmentId || $search !== '')
                         <a href="{{ route('dtr.index', ['date_from' => old('date_from', $dateFrom), 'date_to' => old('date_to', $dateTo)]) }}" class="btn secondary">Reset filter</a>
                     @endif
                 </div>
@@ -106,6 +117,7 @@
                                     <th style="width:2.5rem;"></th>
                                     <th>User ID</th>
                                     <th>Name</th>
+                                    <th>Department</th>
                                     <th>Device</th>
                                     <th>Campus</th>
                                 </tr>
@@ -127,6 +139,7 @@
                                         </td>
                                         <td><code>{{ $user->user_id }}</code></td>
                                         <td>{{ $user->name ?? '—' }}</td>
+                                        <td>{{ $user->department?->name ?? '—' }}</td>
                                         <td>{{ $user->device?->name ?? '—' }}</td>
                                         <td>{{ $user->device?->campus?->name ?? '—' }}</td>
                                     </tr>

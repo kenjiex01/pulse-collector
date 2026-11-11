@@ -7,11 +7,16 @@ use App\Support\ZkTecoUserPrivilege;
 use App\Services\ZkTecoDeviceFingerprintEnroller;
 use App\Models\BiometricDevice;
 use App\Models\BiometricDeviceUser;
+use App\Models\Department;
 use App\Services\BiometricDeviceUserSyncService;
+use App\Services\DeviceUserDepartmentUploadService;
+use App\Support\SpreadsheetDownload;
 use App\Services\ZkTecoDeviceUserWriter;
 use App\Services\ZkTecoDeviceReader;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
@@ -23,11 +28,13 @@ class DeviceUserController extends Controller
         private readonly BiometricDeviceUserSyncService $userSync,
         private readonly ZkTecoDeviceUserWriter $userWriter,
         private readonly ZkTecoDeviceFingerprintEnroller $fingerprintEnroller,
+        private readonly DeviceUserDepartmentUploadService $departmentUpload,
     ) {}
 
     public function index(Request $request): View
     {
         $deviceId = $request->integer('device_id') ?: null;
+        $departmentId = $request->integer('department_id') ?: null;
         $perPageOptions = config('biometric.users.per_page_options', [10, 25, 50, 100]);
         $defaultPerPage = (int) config('biometric.users.per_page', 25);
         $perPageInput = $request->input('per_page');
@@ -51,14 +58,16 @@ class DeviceUserController extends Controller
             : null;
 
         $query = BiometricDeviceUser::query()
-            ->with(['device.campus'])
+            ->with(['device.campus', 'department'])
             ->when($deviceId, fn ($q) => $q->where('biometric_device_id', $deviceId))
+            ->when($departmentId, fn ($q) => $q->where('department_id', $departmentId))
             ->when($search !== '', function ($q) use ($search): void {
                 $like = '%'.$search.'%';
                 $q->where(function ($inner) use ($like): void {
                     $inner->where('user_id', 'like', $like)
                         ->orWhere('name', 'like', $like)
-                        ->orWhere('card_number', 'like', $like);
+                        ->orWhere('card_number', 'like', $like)
+                        ->orWhereHas('department', fn ($department) => $department->where('name', 'like', $like));
                 });
             });
 
@@ -75,13 +84,56 @@ class DeviceUserController extends Controller
         return view('collector.users.index', [
             'users' => $users,
             'devices' => BiometricDevice::query()->with('campus')->orderBy('name')->get(),
+            'departments' => Department::query()->orderBy('name')->get(),
             'selectedDeviceId' => $deviceId,
+            'selectedDepartmentId' => $departmentId,
             'selectedDevice' => $selectedDevice,
             'filteredTotal' => $filteredTotal,
             'search' => $search,
             'perPageSelection' => $perPageSelection,
             'perPageOptions' => $perPageOptions,
         ]);
+    }
+
+    public function downloadDepartmentTemplate(): StreamedResponse
+    {
+        return SpreadsheetDownload::stream(
+            $this->departmentUpload->template(),
+            'device-user-departments',
+        );
+    }
+
+    public function uploadDepartments(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls'],
+        ]);
+
+        try {
+            $result = $this->departmentUpload->import($request->file('file')->getRealPath());
+        } catch (RuntimeException $exception) {
+            return redirect()
+                ->route('users.index')
+                ->with('error', $exception->getMessage());
+        }
+
+        $summary = sprintf(
+            'Assigned %d, updated %d, unchanged %d, skipped %d blank.',
+            $result['assigned'],
+            $result['updated'],
+            $result['unchanged'],
+            $result['skipped'],
+        );
+
+        if ($result['errors'] !== []) {
+            return redirect()
+                ->route('users.index')
+                ->with('warning', $summary.' '.implode(' ', $result['errors']));
+        }
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'Departments uploaded. '.$summary);
     }
 
     public function refreshFromDevice(Request $request, BiometricDevice $device): RedirectResponse
@@ -118,6 +170,7 @@ class DeviceUserController extends Controller
         return view('collector.users.create', [
             'device' => $device,
             'privilegeOptions' => ZkTecoUserPrivilege::options(),
+            'departments' => Department::query()->orderBy('name')->get(),
         ]);
     }
 
@@ -130,6 +183,7 @@ class DeviceUserController extends Controller
             'card_number' => ['nullable', 'string', 'max:64'],
             'privilege' => ['required', 'string', Rule::in(ZkTecoUserPrivilege::keys())],
             'device_uid' => ['nullable', 'integer', 'min:1'],
+            'department_id' => ['required', 'integer', Rule::exists('departments', 'id')->whereNull('deleted_at')],
         ]);
 
         $device = BiometricDevice::query()->findOrFail((int) $validated['device_id']);
@@ -155,6 +209,7 @@ class DeviceUserController extends Controller
                 ZkTecoUserPrivilege::toEnum($validated['privilege']),
                 isset($validated['device_uid']) ? (int) $validated['device_uid'] : null,
             );
+            $this->departmentUpload->assignToUser($validated['user_id'], (int) $validated['department_id']);
         } catch (Throwable $exception) {
             return redirect()
                 ->back()

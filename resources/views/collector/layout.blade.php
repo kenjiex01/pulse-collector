@@ -553,6 +553,7 @@
             <a href="{{ route('archives.index') }}" @class(['active' => request()->routeIs('archives.index') || request()->routeIs('archives.download')])>Deleted log backups</a>
             <a href="{{ route('archives.upload') }}" @class(['active' => request()->routeIs('archives.upload*')])>Upload backup JSON</a>
             <a href="{{ route('users.index') }}" @class(['active' => request()->routeIs('users.*')])>Device users</a>
+            <a href="{{ route('departments.index') }}" @class(['active' => request()->routeIs('departments.*')])>Departments</a>
         </nav>
     </header>
 

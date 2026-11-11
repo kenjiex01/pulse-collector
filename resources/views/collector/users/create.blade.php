@@ -42,6 +42,24 @@
             </div>
 
             <div class="grid-2" style="margin-bottom: 1rem;">
+                <div class="field">
+                    <label for="department_id">Department</label>
+                    <select id="department_id" name="department_id" required @disabled($departments->isEmpty())>
+                        <option value="">Select department</option>
+                        @foreach ($departments as $department)
+                            <option value="{{ $department->id }}" @selected((string) old('department_id') === (string) $department->id)>{{ $department->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('department_id')<p class="errors">{{ $message }}</p>@enderror
+                    @if ($departments->isEmpty())
+                        <p class="muted" style="margin:0.35rem 0 0; font-size:0.8rem; font-weight:400;">
+                            <a href="{{ route('departments.create') }}">Add a department</a> before enrolling a user.
+                        </p>
+                    @endif
+                </div>
+            </div>
+
+            <div class="grid-2" style="margin-bottom: 1rem;">
                 <div class="field field-sm">
                     <label for="device_uid">Device UID slot (optional)</label>
                     <input type="number" id="device_uid" name="device_uid" value="{{ old('device_uid') }}" min="1" placeholder="Auto">

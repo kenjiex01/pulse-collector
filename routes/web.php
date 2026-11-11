@@ -8,6 +8,7 @@ use App\Http\Controllers\DtrDownloadController;
 use App\Http\Controllers\DesktopInstallerUpdateController;
 use App\Http\Controllers\DesktopUpdaterController;
 use App\Http\Controllers\DeviceStatusController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\DeviceUserController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,7 +57,16 @@ Route::get('/archives/{filename}/download', [DeletedLogArchiveController::class,
     ->where('filename', '[^/]+')
     ->name('archives.download');
 
+Route::get('/departments', [DepartmentController::class, 'index'])->name('departments.index');
+Route::get('/departments/create', [DepartmentController::class, 'create'])->name('departments.create');
+Route::post('/departments', [DepartmentController::class, 'store'])->name('departments.store');
+Route::get('/departments/{department}/edit', [DepartmentController::class, 'edit'])->name('departments.edit');
+Route::put('/departments/{department}', [DepartmentController::class, 'update'])->name('departments.update');
+Route::delete('/departments/{department}', [DepartmentController::class, 'destroy'])->name('departments.destroy');
+
 Route::get('/users', [DeviceUserController::class, 'index'])->name('users.index');
+Route::get('/users/department-template', [DeviceUserController::class, 'downloadDepartmentTemplate'])->name('users.department-template');
+Route::post('/users/department-upload', [DeviceUserController::class, 'uploadDepartments'])->name('users.department-upload');
 Route::get('/users/create', [DeviceUserController::class, 'create'])->name('users.create');
 Route::post('/users', [DeviceUserController::class, 'store'])->name('users.store');
 Route::get('/users/{deviceUser}/edit', [DeviceUserController::class, 'edit'])->name('users.edit');
